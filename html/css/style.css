@@ -1,0 +1,485 @@
+﻿:root{
+    --bg-0: #071016; /* page background */
+    --bg-1: linear-gradient(180deg,#071016 0%,#0a1520 100%);
+    --card: rgba(255,255,255,0.03);
+    --glass: rgba(255,255,255,0.04);
+    --muted: #9aa6b2;
+    --accent: #00e5ff; /* cyan */
+    --accent-2: #7c4dff; /* purple */
+    --success: #4ade80;
+    --danger: #ff6b6b;
+    --glass-border: rgba(255,255,255,0.06);
+    --radius: 8px;
+    font-synthesis: none;
+}
+
+body {
+  padding-top: 60px;
+  padding-bottom: 20px;
+    background: var(--bg-1);
+    color: var(--muted);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Fix single page anchor nav */
+.anchor:before {
+  display: block;
+  content: " ";
+  margin-top: -75px;
+  height: 75px;
+  visibility: hidden;
+}
+
+.esps {
+   text-align: center;
+}
+
+.esps-legend {
+    margin-top: 5px;
+    margin-bottom: 5px;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.esps-table {
+    margin-left: 10px;
+    border-spacing: 10px;
+    width: 100%;
+}
+
+.ApCred-table {
+    margin-left: 17%;
+    table-layout: auto;
+    border-collapse: collapse;
+}
+
+.footer {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+    height: 28px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    color: var(--muted);
+    border-top: 1px solid rgba(255,255,255,0.02);
+    display: flex;
+    align-items: center;
+    padding-left: 14px;
+    font-size: 12px;
+}
+
+/* Color picker */
+.colorpicker-saturation {
+  width: 200px;
+  height: 200px;
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(2,6,23,0.6) inset;
+}
+
+.colorpicker-hue,
+.colorpicker-alpha {
+  width: 30px;
+  height: 200px;
+}
+
+.colorpicker-color,
+.colorpicker-color div {
+  height: 30px;
+}
+
+.btn-cp {
+    border: 1px solid var(--glass-border);
+  width: 100%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    color: var(--muted);
+    padding: 8px 10px;
+    border-radius: 6px;
+}
+
+.white {
+  background-color: #FFFFFF;
+  border: 1px solid;
+  width: 100%;
+}
+
+.red {
+  background-color: #FF0000;
+  border: 1px solid;
+  width: 100%;
+}
+
+.green {
+  background-color: #00FF00;
+  border: 1px solid;
+  width: 100%;
+}
+
+.blue {
+  background-color: #0000FF;
+  border: 1px solid;
+  width: 100%;
+}
+
+canvas {
+    background-color: #020305;
+    border-radius: 6px;
+    box-shadow: 0 8px 30px rgba(2,8,20,0.6) inset;
+  width: 100%;
+  height: auto;
+}
+
+/* Snackbar - position it at the bottom and in the middle of the screen */
+#snackbar {
+    visibility: hidden;
+    min-width: 260px;
+    margin-left: -130px;
+    background: linear-gradient(90deg, rgba(0,0,0,0.6), rgba(10,14,20,0.6));
+    backdrop-filter: blur(6px);
+    color: var(--muted);
+    text-align: center;
+    border-radius: 10px;
+    padding: 14px 18px;
+    position: fixed;
+    z-index: 2000;
+    left: 50%;
+    bottom: 30px;
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 12px 30px rgba(2,6,23,0.7);
+}
+
+/* Show the snackbar when clicking on a button (class added with JavaScript) */
+#snackbar.show {
+    visibility: visible;
+    -webkit-animation: fadein 0.45s cubic-bezier(.2,.9,.2,1), fadeout 0.45s 3s cubic-bezier(.2,.9,.2,1);
+    animation: fadein 0.45s cubic-bezier(.2,.9,.2,1), fadeout 0.45s 3s cubic-bezier(.2,.9,.2,1);
+}
+
+/* Animations to fade the snackbar in and out */
+@-webkit-keyframes fadein {
+    from {bottom: 0; opacity: 0;}
+    to {bottom: 30px; opacity: 1;}
+}
+
+@keyframes fadein {
+    from {bottom: 0; opacity: 0;}
+    to {bottom: 30px; opacity: 1;}
+}
+
+@-webkit-keyframes fadeout {
+    from {bottom: 30px; opacity: 1;}
+    to {bottom: 0; opacity: 0;}
+}
+
+@keyframes fadeout {
+    from {bottom: 30px; opacity: 1;}
+    to {bottom: 0; opacity: 0;}
+}
+
+/* Progress bar */
+.bar {
+  width: 100%;
+    height: 14px;
+    border-radius: 10px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.03);
+}
+
+.bar::after{
+    content: '';
+    display:block;
+    height:100%;
+    width:40%;
+    background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 100%);
+    box-shadow: 0 6px 18px rgba(124,77,255,0.16);
+    animation: glide 1.6s linear infinite;
+}
+
+@keyframes glide {
+    0% { transform: translateX(-100%); }
+
+/* Copy-to-clipboard and file-management styles extracted from index.html */
+.copyable {
+    cursor: pointer;
+    color: var(--link-color, #0078d7);
+    text-decoration: underline dotted;
+    position: relative;
+    transition: color 0.2s ease;
+}
+
+.copyable:hover {
+    color: var(--link-hover-color, #c00);
+}
+
+/* Tooltip styling */
+.copy-tooltip {
+    position: absolute;
+    background: #333;
+    color: #fff;
+    font-size: 0.75em;
+    padding: 4px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    transform: translateY(-150%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 999;
+}
+
+.copy-tooltip.show {
+    opacity: 1;
+    transform: translateY(-200%);
+}
+
+/* File management action button disabled state */
+.button.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* Selected count badge */
+.selected-badge {
+    margin-left: 12px;
+    font-weight: 600;
+    background: #007bff;
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.9em;
+}
+    100% { transform: translateX(200%); }
+}
+
+@keyframes move {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 28px 0;
+  }
+}
+
+.form-horizontal .control-label.text-left {
+    text-align: left;
+}
+
+/* Pulled from Bootstrap v4.5.3 */
+input:invalid {
+    border-color: #dc3545;
+    padding-right: calc(1.5em + 0.75rem);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23dc3545' viewBox='0 0 12 12'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+/* Pulled from Bootstrap v4.5.3 */
+/*
+input:valid {
+    border-color: #28a745;
+    padding-right: calc(1.5em + 0.75rem);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+*/
+
+#filemanagementupload
+{
+    border: 1px dashed rgba(255,255,255,0.06);
+    border-radius: 12px;
+    width: 480px;
+    font-family: inherit;
+    margin: 100px auto;
+    padding: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent);
+}
+
+#drop-area.highlight
+{
+    border-color: purple;
+}
+
+p
+{
+    margin-top: 0;
+}
+
+.my-form
+{
+    margin-bottom: 10px;
+}
+
+#gallery
+{
+    margin-top: 10px;
+}
+
+#gallery img
+{
+        width: 150px;
+        margin-bottom: 10px;
+        margin-right: 10px;
+        vertical-align: middle;
+    }
+
+.button
+{
+    display: inline-block;
+    padding: 8px 12px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    cursor: pointer;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.04);
+    color: var(--muted);
+    transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+    box-shadow: 0 6px 18px rgba(2,6,23,0.5);
+}
+
+.button:hover
+{
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(2,6,23,0.7);
+}
+
+#fileElem
+{
+    display: none;
+}
+
+.simple-tree {
+    user-select: none;
+    -moz-user-select: none;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+    .simple-tree > details > summary {
+        display: none;
+    }
+
+    .simple-tree a,
+    .simple-tree summary {
+        display: block;
+        width: fit-content;
+        width: -moz-fit-content;
+        border: solid 1px transparent;
+        padding: 0 2px;
+        outline: none;
+        cursor: pointer;
+    }
+
+    .simple-tree a {
+        text-decoration: none;
+        color: inherit;
+    }
+
+    .simple-tree ::-webkit-details-marker {
+        display: none;
+    }
+
+    .simple-tree summary {
+        list-style-type: none;
+        outline: none;
+        background: transparent;
+        padding: 6px 8px;
+        border-radius: 6px;
+    }
+
+    .simple-tree.dark summary {
+        background-color: transparent;
+    }
+
+    .simple-tree details > :not(details),
+    .simple-tree details {
+        position: relative;
+    }
+
+        .simple-tree details :not(summary) {
+            margin-left: 20px;
+        }
+
+    .simple-tree.nodots details :not(summary) {
+        margin-left: 12px;
+    }
+
+    .simple-tree details::before,
+    .simple-tree details > :not(details)::before {
+        content: '';
+        width: 10px;
+        display: block;
+        position: absolute;
+    }
+
+    .simple-tree details::before,
+    .simple-tree details > :not(details)::before {
+        background: url('data:image/svg+xml;utf8,<svg viewBox="0 0 2 2" xmlns="http://www.w3.org/2000/svg"><g><rect x="0" y="0" width="1" height="1"/></g></svg>') left top / 2px 2px;
+    }
+
+    .simple-tree.dark details::before,
+    .simple-tree.dark details > :not(summary)::before {
+        background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 2 2" xmlns="http://www.w3.org/2000/svg"><g><rect x="0" y="0" width="1" height="1" fill="white"/></g></svg>');
+    }
+
+    .simple-tree.nodots details::before,
+    .simple-tree.nodots details > :not(summary)::before {
+        background-image: none;
+    }
+
+    .simple-tree details::before {
+        top: 0;
+        height: 100%;
+        background-repeat: repeat-y;
+        left: 5px;
+        z-index: -1;
+    }
+
+    .simple-tree details > :not(details)::before {
+        top: 8px;
+        height: calc(100% - 8px);
+        background-repeat: repeat-x;
+        left: -15px;
+    }
+
+    .simple-tree details > summary::before {
+        background: url('data:image/svg+xml;utf8,<svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg"><g><rect x="0" y="0" width="12" height="12" fill="white" stroke="gray" stroke-width="1"/><line x1="3" y1="6" x2="9" y2="6" stroke="black" stroke-width="2"/><line x1="6" y1="3" x2="6" y2="9" stroke="black" stroke-width="2"/></g></svg>') center center / 12px 12px no-repeat;
+        left: -22px;
+        top: 2px;
+        width: 16px;
+        height: 16px;
+        display: inline-block;
+        content: '';
+        background-image: radial-gradient(circle at 30% 35%, var(--accent) 0%, transparent 25%), linear-gradient(90deg,var(--accent-2),transparent 70%);
+        opacity: 0.9;
+    }
+
+    .simple-tree details[open] > summary::before {
+        background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg"><title/><g><rect x="0" y="0" width="12" height="12" fill="white" stroke="gray" stroke-width="1"/><line x1="3" y1="6" x2="9" y2="6" stroke="black" stroke-width="2"/></g></svg>');
+    }
+/* async tree */
+.async-tree details[open][data-loaded=false] {
+    pointer-events: none;
+}
+
+    .async-tree details[open][data-loaded=false] > summary::before {
+        background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><g><animateTransform attributeName="transform" type="rotate" from="0 32 32" to="360 32 32" dur="1s" repeatCount="indefinite"/><circle cx="32" cy="32" r="32" fill="whitesmoke"/><path d="M 62 32 A 30 30 0 0 0 32 2" style="stroke: black; stroke-width:6; fill:none;"/></g></svg>');
+    }
+
+.async-tree.black details[open][data-loaded=false] > summary::before {
+    background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><g><animateTransform attributeName="transform" type="rotate" from="0 32 32" to="360 32 32" dur="1s" repeatCount="indefinite"/><circle cx="32" cy="32" r="32" fill="whitesmoke"/><path d="M 62 32 A 30 30 0 0 0 32 2" style="stroke: white; stroke-width:6; fill:none;"/></g></svg>');
+}
+/* select tree */
+.select-tree .selected {
+    background-color: #beebff;
+    border-color: #99defd;
+    z-index: 1;
+}
+
+.select-tree.dark .selected {
+    background-color: #3a484e;
+    border-color: #99defd;
+}
