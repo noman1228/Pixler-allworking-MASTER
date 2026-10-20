@@ -1,0 +1,77 @@
+<fieldset id="monster_permanent">
+    <legend class="esps-legend" id="Title">Monster Permanent Configuration</legend>
+    <p>Each physical module uses three input channels: red, green, and blue. Neutral RGB white drives cool white; warm white is kept off.</p>
+    <p>Every module is transmitted as R, G, B, CW, WW, 00 (48 bits), MSB first at 800 kHz.</p>
+
+    <div class="form-group">
+        <label class="control-label col-sm-2" for="pixel_count">Module Count</label>
+        <div class="col-sm-4">
+            <input type="number" class="form-control is-valid PixelCount" id="pixel_count" step="1" min="1" max="3000" value="1" required title="Number of physical lighting modules" onchange="MonsterPermanent_OnChange()">
+        </div>
+        <label class="control-label col-sm-2" for="group_size">Group Size</label>
+        <div class="col-sm-4">
+            <input type="number" class="form-control is-valid PixelCount" id="group_size" step="1" min="1" max="1" value="1" required title="Group every X modules together" onchange="MonsterPermanent_OnChange()">
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label class="control-label col-sm-2" for="color_order">Input Format</label>
+        <div class="col-sm-4">
+            <select class="form-control" id="color_order">
+                <option value="rgb">RGB (white to CW)</option>
+            </select>
+        </div>
+        <label class="control-label col-sm-2" for="zig_size">Zigzag Count</label>
+        <div class="col-sm-4">
+            <input type="number" class="form-control is-valid" id="zig_size" step="1" min="0" max="3000" value="0" required title="Zigzag every X physical modules" onchange="MonsterPermanent_OnChange()">
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label class="control-label col-sm-2" for="gamma">Gamma Value</label>
+        <div class="col-sm-4">
+            <input type="number" class="form-control is-valid" id="gamma" step="0.1" min="1.0" max="5.0" value="1.0" required title="Set to 1.0 to disable gamma correction">
+        </div>
+        <label class="control-label col-sm-2" for="brightness">Brightness (%)</label>
+        <div class="col-sm-4">
+            <input type="number" class="form-control is-valid" id="brightness" step="1" min="1" max="100" value="100" required title="Output brightness percentage">
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label class="control-label col-sm-2" for="prependnullcount">Start NULL Modules</label>
+        <div class="col-sm-4">
+            <input type="number" class="form-control is-valid" id="prependnullcount" step="1" min="0" max="3000" value="0" title="Black module records before the configured data" onchange="MonsterPermanent_OnChange()">
+        </div>
+        <label class="control-label col-sm-2" for="appendnullcount">End NULL Modules</label>
+        <div class="col-sm-4">
+            <input type="number" class="form-control is-valid" id="appendnullcount" step="1" min="0" max="3000" value="0" title="Black module records after the configured data" onchange="MonsterPermanent_OnChange()">
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label class="control-label col-sm-offset-6 col-sm-2" for="interframetime">Reset Time (us)</label>
+        <div class="col-sm-4">
+            <input type="number" class="form-control is-valid" id="interframetime" step="1" min="80" max="10000" value="80" required title="LOW reset/latch interval" onchange="MonsterPermanent_OnChange()">
+        </div>
+    </div>
+
+    <div class="form-group hidden AdvancedMode esp32">
+        <label class="control-label col-sm-2 esp32" for="data_pin">GPIO Output</label>
+        <div class="col-sm-2 esp32">
+            <input type="number" class="form-control is-valid esp32" id="data_pin" step="1" min="0" max="64" value="65" required title="GPIO pin used for output data">
+        </div>
+    </div>
+</fieldset>
+
+<script>
+    function MonsterPermanent_OnChange()
+    {
+        var modules = parseInt($('#monster_permanent #pixel_count').val(), 10) || 0;
+        modules += parseInt($('#monster_permanent #prependnullcount').val(), 10) || 0;
+        modules += parseInt($('#monster_permanent #appendnullcount').val(), 10) || 0;
+        var resetSeconds = (parseInt($('#monster_permanent #interframetime').val(), 10) || 80) / 1000000;
+        var frameSeconds = Math.max(0.025, (modules * 6 * 8 / 800000) + resetSeconds);
+        $('#refresh').html(Math.ceil(frameSeconds * 1000) + ' ms / ' + Math.floor(1 / frameSeconds) + ' fps');
+    }
+</script>

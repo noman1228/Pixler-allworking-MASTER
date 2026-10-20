@@ -1914,7 +1914,7 @@ function LoadDeviceSetupSelectedOption(OptionListName, DisplayedChannelId)
     HtmlLoadFileName = HtmlLoadFileName + ".html";
     // console.debug("Adjusted HtmlLoadFileName: " + HtmlLoadFileName);
 
-    //TODO: Detect modules that don't require configuration - DDP, Alexa, ?
+    //TODO: Detect modules that don't require configuration - DDP, ?
     // try to load the field definition file for this channel type
     loadContentSync(HtmlLoadFileName, '#' + OptionListName + 'mode' + DisplayedChannelId, OptionListName, DisplayedChannelId);
 

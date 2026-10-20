@@ -28,8 +28,6 @@
 #include "input/InputDisabled.hpp"
 #include "input/InputE131.hpp"
 #include "input/InputEffectEngine.hpp"
-#include "input/InputMQTT.h"
-#include "input/InputAlexa.h"
 #include "input/InputDDP.h"
 #include "input/InputFPPRemote.h"
 #include "input/InputArtnet.hpp"
@@ -64,7 +62,7 @@ struct InputTypeXlateMap_t
     c_InputMgr::e_InputChannelIds ChannelId;
 };
 
-static const InputTypeXlateMap_t InputTypeXlateMap[c_InputMgr::e_InputType::InputType_End] =
+static const InputTypeXlateMap_t InputTypeXlateMap[] =
 {
     {c_InputMgr::e_InputType::InputType_E1_31,    "E1.31",      c_InputMgr::e_InputChannelIds::InputPrimaryChannelId},
     {c_InputMgr::e_InputType::InputType_DDP,      "DDP",        c_InputMgr::e_InputChannelIds::InputPrimaryChannelId},
@@ -73,8 +71,6 @@ static const InputTypeXlateMap_t InputTypeXlateMap[c_InputMgr::e_InputType::Inpu
 #endif // def SUPPORT_FPP
     {c_InputMgr::e_InputType::InputType_Artnet,   "Artnet",     c_InputMgr::e_InputChannelIds::InputPrimaryChannelId},
     {c_InputMgr::e_InputType::InputType_Effects,  "Effects",    c_InputMgr::e_InputChannelIds::InputSecondaryChannelId},
-    {c_InputMgr::e_InputType::InputType_MQTT,     "MQTT",       c_InputMgr::e_InputChannelIds::InputSecondaryChannelId},
-    {c_InputMgr::e_InputType::InputType_Alexa,    "Alexa",      c_InputMgr::e_InputChannelIds::InputSecondaryChannelId},
     {c_InputMgr::e_InputType::InputType_Disabled, "Disabled",   c_InputMgr::e_InputChannelIds::InputChannelId_ALL}
 };
 
@@ -320,16 +316,14 @@ void c_InputMgr::CreateNewConfig ()
     JsonWrite(JsonConfig, CN_cfgver, ConstConfig.CurrentConfigVersion);
 
     // DEBUG_V ("for each Input type");
-    for (int InputTypeId = int (InputType_Start);
-         InputTypeId < int (InputType_End);
-         ++InputTypeId)
+    for (const auto & InputType : InputTypeXlateMap)
     {
-        // DEBUG_V(String("instantiate the Input type: ") + InputTypeId);
+        // DEBUG_V(String("instantiate the Input type: ") + int(InputType.id));
         // DEBUG_V("for each input channel");
         for (auto & CurrentInput : InputChannelDrivers)
         {
             // DEBUG_V(String("DriverId: ") + CurrentInput.DriverId);
-            InstantiateNewInputChannel (e_InputChannelIds(CurrentInput.DriverId), e_InputType(InputTypeId), false);
+            InstantiateNewInputChannel (e_InputChannelIds(CurrentInput.DriverId), InputType.id, false);
         }// end for each interface
 
         // DEBUG_V ("collect the config data");
@@ -544,42 +538,6 @@ void c_InputMgr::InstantiateNewInputChannel (e_InputChannelIds ChannelIndex, e_I
                         logcon (String (F ("Starting Effects Engine for channel '")) + ChannelIndex + "'.");
                     }
                     AllocateInput(c_InputEffectEngine, InputChannelDrivers, ChannelIndex, InputType_Effects, InputDataBufferSize);
-                    // DEBUG_V ("");
-                }
-                else
-                {
-                    AllocateInput(c_InputDisabled, InputChannelDrivers, ChannelIndex, InputType_Disabled, InputDataBufferSize);
-                }
-                break;
-            }
-
-            case e_InputType::InputType_MQTT:
-            {
-                if (InputTypeIsAllowedOnChannel (InputType_MQTT, ChannelIndex))
-                {
-                    if (!IsBooting)
-                    {
-                        logcon (String (F ("Starting MQTT for channel '")) + ChannelIndex + "'.");
-                    }
-                    AllocateInput(c_InputMQTT, InputChannelDrivers, ChannelIndex, InputType_MQTT, InputDataBufferSize);
-                    // DEBUG_V ("");
-                }
-                else
-                {
-                    AllocateInput(c_InputDisabled, InputChannelDrivers, ChannelIndex, InputType_Disabled, InputDataBufferSize);
-                }
-                break;
-            }
-
-            case e_InputType::InputType_Alexa:
-            {
-                if (InputTypeIsAllowedOnChannel (InputType_Alexa, ChannelIndex))
-                {
-                    if (!IsBooting)
-                    {
-                        logcon (String (F ("Starting Alexa for channel '")) + ChannelIndex + "'.");
-                    }
-                    AllocateInput(c_InputAlexa, InputChannelDrivers, ChannelIndex, InputType_Alexa, InputDataBufferSize);
                     // DEBUG_V ("");
                 }
                 else

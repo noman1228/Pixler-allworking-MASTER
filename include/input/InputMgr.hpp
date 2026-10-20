@@ -73,9 +73,8 @@ public:
     {
         InputType_E1_31 = 0,
         InputType_Effects,
-        InputType_MQTT,
-        InputType_Alexa,
-        InputType_DDP,
+        // IDs 2 and 3 are reserved to preserve saved input configurations.
+        InputType_DDP = 4,
 #ifdef SUPPORT_FPP
         InputType_FPP,
 #endif // def SUPPORT_FPP

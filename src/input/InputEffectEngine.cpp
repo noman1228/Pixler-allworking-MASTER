@@ -201,38 +201,6 @@ void c_InputEffectEngine::GetConfig (JsonObject& jsonConfig)
 } // GetConfig
 
 //-----------------------------------------------------------------------------
-void c_InputEffectEngine::GetMqttEffectList (JsonObject& jsonConfig)
-{
-    // DEBUG_START;
-    JsonArray EffectsArray = jsonConfig[(char*)CN_effect_list].to<JsonArray> ();
-
-    for (EffectDescriptor_t currentEffect : ListOfEffects)
-    {
-        EffectsArray.add (currentEffect.name);
-    }
-    // DEBUG_END;
-} // GetMqttEffectList
-
-//-----------------------------------------------------------------------------
-void c_InputEffectEngine::GetMqttConfig (MQTTConfiguration_t & mqttConfig)
-{
-    // DEBUG_START;
-
-    mqttConfig.effect       = ActiveEffect->name;
-    mqttConfig.mirror       = EffectMirror;
-    mqttConfig.allLeds      = EffectAllLeds;
-    mqttConfig.brightness   = uint8_t(EffectBrightness * 255.0);
-    mqttConfig.whiteChannel = EffectWhiteChannel;
-
-    mqttConfig.color.r = EffectColor.r;
-    mqttConfig.color.g = EffectColor.g;
-    mqttConfig.color.b = EffectColor.b;
-
-    // DEBUG_END;
-
-} // GetMqttConfig
-
-//-----------------------------------------------------------------------------
 void c_InputEffectEngine::GetStatus (JsonObject& jsonStatus)
 {
     // DEBUG_START;
@@ -599,34 +567,6 @@ bool c_InputEffectEngine::SetConfig (ArduinoJson::JsonObject& jsonConfig)
 
     // DEBUG_END;
     return true;
-} // SetConfig
-
-//-----------------------------------------------------------------------------
-void c_InputEffectEngine::SetMqttConfig (MQTTConfiguration_t& mqttConfig)
-{
-    // DEBUG_START;
-    String effectName;
-
-    effectName = mqttConfig.effect;
-    EffectMirror = mqttConfig.mirror;
-    EffectAllLeds = mqttConfig.allLeds;
-    EffectWhiteChannel = mqttConfig.whiteChannel;
-
-    uint16_t tempBrightness = uint8_t (EffectBrightness * 255.0);
-    tempBrightness = mqttConfig.brightness;
-    EffectBrightness = float (tempBrightness) / 255.0;
-
-    EffectColor.r = mqttConfig.color.r;
-    EffectColor.g = mqttConfig.color.g;
-    EffectColor.b = mqttConfig.color.b;
-
-    SetBufferInfo (InputDataBufferSize);
-
-    validateConfiguration ();
-
-    setEffect (effectName);
-
-    // DEBUG_END;
 } // SetConfig
 
 //-----------------------------------------------------------------------------

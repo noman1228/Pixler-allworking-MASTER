@@ -3,7 +3,7 @@
 [![Build Status](https://github.com/forkineye/ESPixelStick/actions/workflows/build.yml/badge.svg)](https://github.com/forkineye/ESPixelStick/actions/workflows/build.yml)
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://paypal.me/ShelbyMerrick)
 
-This is the Arduino based ESPixelStick firmware for ESP8266 and ESP32 platforms. The ESPixelStick firmware supports the control of clock-less pixels, DMX512 devices and relays based upon your hardware platform. Pixel limitations are mostly based upon your desired refresh rate, around 800 pixels for a 25ms E1.31 source rate utilizing a single port controller like the ESPixelStick V3. DDP is supported as well along with Alexa and MQTT support for integration into home automation systems. On platforms with SD cards available, sequences from xLights may be uploaded for playback in either standalone or FPP Remote modes.
+This is the Arduino based ESPixelStick firmware for ESP8266 and ESP32 platforms. The ESPixelStick firmware supports the control of clock-less pixels, DMX512 devices and relays based upon your hardware platform. Pixel limitations are mostly based upon your desired refresh rate, around 800 pixels for a 25ms E1.31 source rate utilizing a single port controller like the ESPixelStick V3. DDP is also supported. On platforms with SD cards available, sequences from xLights may be uploaded for playback in either standalone or FPP Remote modes.
 
 ESP-01 modules such as those on the ESPixelStick V1 and V2 are no longer supported as there is not enough flash space. If you have one of these controllers, [ESPixelStick v3.2](https://github.com/forkineye/ESPixelStick/releases/tag/v3.2) is the latest supported release. At least 4MB of flash is required for ESP8266 platforms.
 

@@ -76,16 +76,6 @@ public:
         String      wsTCode;
     };
 
-    struct MQTTConfiguration_t
-    {
-        String  effect;
-        bool    mirror;
-        bool    allLeds;
-        uint8_t brightness;
-        bool    whiteChannel;
-        CRGB    color;
-    };
-
     struct MarqueeGroup_t
     {
        uint32_t NumPixelsInGroup;
@@ -97,10 +87,7 @@ public:
     // functions to be provided by the derived class
     void Begin ();                             ///< set up the operating environment based on the current config (or defaults)
     bool SetConfig (JsonObject& jsonConfig);   ///< Set a new config in the driver
-    void SetMqttConfig (MQTTConfiguration_t& mqttConfig);   ///< Set a new config in the driver
     void GetConfig (JsonObject& jsonConfig);   ///< Get the current config used by the driver
-    void GetMqttConfig (MQTTConfiguration_t& mqttConfig);   ///< Get the current config used by the driver
-    void GetMqttEffectList (JsonObject& jsonConfig);   ///< Get the current config used by the driver
     void GetStatus (JsonObject& jsonStatus);
     void Process   ();
     void Poll ();                              ///< Call from loop(),  renders Input data

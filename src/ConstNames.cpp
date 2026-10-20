@@ -240,6 +240,7 @@ const CN_PROGMEM char CN_wifi                     [] = "wifi";
 const CN_PROGMEM char CN_WiFiDrv                  [] = "WiFiDrv";
 const CN_PROGMEM char CN_WS2801                   [] = "WS2801";
 const CN_PROGMEM char CN_WS2811                   [] = "WS2811";
+const CN_PROGMEM char CN_MonsterPermanent         [] = "Monster Permanent";
 const CN_PROGMEM char CN_XP                       [] = "XP";
 const CN_PROGMEM char CN_zig_size                 [] = "zig_size";
 

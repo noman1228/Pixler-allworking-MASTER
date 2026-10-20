@@ -36,15 +36,8 @@
 #include "service/SensorDS18B20.h"
 #endif // def SUPPORT_SENSOR_DS18B20
 
-// #define ESPALEXA_DEBUG
-#define ESPALEXA_MAXDEVICES 2
-#define ESPALEXA_ASYNC //it is important to define this before #include <Espalexa.h>!
-#include <Espalexa.h>
-
 const uint8_t HTTP_PORT = 80;      ///< Default web server port
 
-static Espalexa         espalexa;
-static EspalexaDevice   AlexaDevice;
 static EFUpdate         efupdate; /// EFU Update Handler
 static AsyncWebServer   webServer (HTTP_PORT);  // Web Server
 
@@ -638,36 +631,13 @@ void c_WebMgr::init ()
                 {
                     request->send(200);
                 }
-                else if (true == this->IsAlexaCallbackValid())
-                {
-                    // DEBUG_V ("IsAlexaCallbackValid == true");
-                    if (!espalexa.handleAlexaApiCall (request)) //if you don't know the URI, ask espalexa whether it is an Alexa control request
-                    {
-                        // DEBUG_V ("Alexa Callback could not resolve the request");
-                        request->send (404, CN_applicationSLASHjson, F("{\"status\":\"Page Not found\"}"));
-                    }
-                }
                 else
                 {
-                    // DEBUG_V ("IsAlexaCallbackValid == false");
                     request->send (404, CN_applicationSLASHjson, F("{\"status\":\"Page Not found\"}"));
         		}
             });
 
-    	//give espalexa a pointer to the server object so it can use your server instead of creating its own
-    	espalexa.begin (&webServer);
-
-        // webServer.begin ();
-
-        pAlexaDevice = new((char*)&AlexaDevice) EspalexaDevice (String (F ("ESP")), [this](EspalexaDevice* pDevice)
-        {
-            this->onAlexaMessage (pDevice);
-
-        }, EspalexaDeviceType::extendedcolor);
-
-    	pAlexaDevice->setName (config.id);
-    	espalexa.addDevice (pAlexaDevice);
-    	espalexa.setDiscoverable ((nullptr != pAlexaCallback) ? true : false);
+        webServer.begin ();
 
     	logcon (String (F ("Web server listening on port ")) + HTTP_PORT);
 
@@ -675,31 +645,6 @@ void c_WebMgr::init ()
     }
     // DEBUG_END;
 }
-
-//-----------------------------------------------------------------------------
-void c_WebMgr::RegisterAlexaCallback (DeviceCallbackFunction cb)
-{
-    // DEBUG_START;
-
-    pAlexaCallback = cb;
-    espalexa.setDiscoverable (IsAlexaCallbackValid());
-
-    // DEBUG_END;
-} // RegisterAlexaCallback
-
-//-----------------------------------------------------------------------------
-void c_WebMgr::onAlexaMessage (EspalexaDevice* dev)
-{
-    // DEBUG_START;
-    if (true == IsAlexaCallbackValid())
-    {
-        // DEBUG_V ("");
-
-        pAlexaCallback (dev);
-    }
-    // DEBUG_END;
-
-} // onAlexaMessage
 
 #ifdef SUPPORT_DEVICE_OPTION_LIST
 //-----------------------------------------------------------------------------
@@ -961,23 +906,6 @@ void c_WebMgr::FirmwareUpload (AsyncWebServerRequest* request,
     // DEBUG_END;
 
 } // onEvent
-
-//-----------------------------------------------------------------------------
-/*
- * This function is called as part of the Arduino "loop" and does things that need
- * periodic poking.
- *
- */
-void c_WebMgr::Process ()
-{
-    if(HasBeenInitialized)
-    {
-        if (true == IsAlexaCallbackValid())
-        {
-        	espalexa.loop ();
-        }
-    }
-} // Process
 
 //-----------------------------------------------------------------------------
 // create a global instance of the WEB UI manager

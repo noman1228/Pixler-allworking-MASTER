@@ -246,6 +246,7 @@ extern const CN_PROGMEM char CN_wifi [];
 extern const CN_PROGMEM char CN_WiFiDrv [];
 extern const CN_PROGMEM char CN_WS2801 [];
 extern const CN_PROGMEM char CN_WS2811 [];
+extern const CN_PROGMEM char CN_MonsterPermanent [];
 extern const CN_PROGMEM char CN_XP [];
 extern const CN_PROGMEM char CN_zig_size [];
 

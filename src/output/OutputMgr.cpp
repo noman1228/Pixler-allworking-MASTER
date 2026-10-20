@@ -43,6 +43,8 @@
 #include "output/OutputWS2801Spi.hpp"
 #include "output/OutputWS2811Rmt.hpp"
 #include "output/OutputWS2811Uart.hpp"
+#include "output/OutputMonsterPermanentRmt.hpp"
+#include "output/OutputMonsterPermanentUart.hpp"
 #include "output/OutputGS8208Uart.hpp"
 #include "output/OutputGS8208Rmt.hpp"
 #include "output/OutputUCS8903Uart.hpp"
@@ -121,6 +123,10 @@ static const OutputTypeXlateMap_t OutputTypeXlateMap[c_OutputMgr::e_OutputType::
 #ifdef SUPPORT_OutputType_WS2811
         {c_OutputMgr::e_OutputType::OutputType_WS2811, "WS2811"},
 #endif // def SUPPORT_OutputType_WS2811
+
+#ifdef SUPPORT_OutputType_MonsterPermanent
+        {c_OutputMgr::e_OutputType::OutputType_MonsterPermanent, "Monster Permanent"},
+#endif // def SUPPORT_OutputType_MonsterPermanent
 
 #ifdef SUPPORT_OutputType_Relay
         {c_OutputMgr::e_OutputType::OutputType_Relay, "Relay"},
@@ -794,6 +800,32 @@ void c_OutputMgr::InstantiateNewOutputChannel(DriverInfo_t & CurrentOutput, e_Ou
                 break;
             }
 #endif // def SUPPORT_OutputType_WS2811
+
+#ifdef SUPPORT_OutputType_MonsterPermanent
+            case e_OutputType::OutputType_MonsterPermanent:
+            {
+                if (OM_IS_UART)
+                {
+                    AllocatePort(c_OutputMonsterPermanentUart, CurrentOutput, CurrentOutput.DriverId, CurrentOutput.GpioPin, CurrentOutput.PortId, OutputType_MonsterPermanent);
+                    break;
+                }
+
+                #if defined(ARDUINO_ARCH_ESP32)
+                if (OM_IS_RMT)
+                {
+                    AllocatePort(c_OutputMonsterPermanentRmt, CurrentOutput, CurrentOutput.DriverId, CurrentOutput.GpioPin, CurrentOutput.PortId, OutputType_MonsterPermanent);
+                    break;
+                }
+                #endif
+
+                if (!BuildingNewConfig)
+                {
+                    logcon(CN_stars + String(F(" Cannot Start Monster Permanent for channel '")) + CurrentOutput.DriverId + "'. " + CN_stars);
+                }
+                AllocatePort(c_OutputDisabled, CurrentOutput, CurrentOutput.DriverId, CurrentOutput.GpioPin, CurrentOutput.PortId, OutputType_Disabled);
+                break;
+            }
+#endif // def SUPPORT_OutputType_MonsterPermanent
 
 #ifdef SUPPORT_OutputType_UCS1903
             case e_OutputType::OutputType_UCS1903:

@@ -20,6 +20,7 @@ from pathlib import Path
 from colorama import Fore, Style
 import serial.tools.list_ports
 import configparser
+import importlib.util
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Union, Dict, Any
 from datetime import datetime
@@ -255,11 +256,12 @@ class ESPBuildManager:
         """Check that all required tools are installed"""
         print("Checking dependencies...")
         required_tools = {
-            'platformio': 'PlatformIO CLI',
             'python': 'Python interpreter'
         }
         
         missing = []
+        if importlib.util.find_spec("platformio") is None:
+            missing.append("PlatformIO CLI")
         for tool, name in required_tools.items():
             if not shutil.which(tool):
                 missing.append(name)
@@ -288,11 +290,11 @@ class ESPBuildManager:
         self.progress.add_task(f"Build {env_name}", 2)
         
         try:
-            subprocess.run(["platformio", "run", "-e", env_name], check=True)
+            subprocess.run([sys.executable, "-m", "platformio", "run", "-e", env_name], check=True)
             self.progress.update_task(f"Build {env_name}")
             
             print(f"{Fore.CYAN}📦 Building filesystem image for {env_name}...{Style.RESET_ALL}")
-            subprocess.run(["platformio", "run", "-t", "buildfs", "-e", env_name], check=True)
+            subprocess.run([sys.executable, "-m", "platformio", "run", "-t", "buildfs", "-e", env_name], check=True)
             
             self.progress.update_task(f"Build {env_name}")
         finally:
@@ -818,14 +820,14 @@ class ESPBuildManager:
         """Launch the PlatformIO serial monitor"""
         print(f"{Fore.CYAN}📡 Launching serial monitor on {port}...{Style.RESET_ALL}")
         try:
-            subprocess.run(["platformio", "device", "monitor", "--port", port, "--baud", str(baud)])
+            subprocess.run([sys.executable, "-m", "platformio", "device", "monitor", "--port", port, "--baud", str(baud)])
         except Exception as e:
             print(f"{Fore.RED}✘ Could not launch serial monitor: {e}{Style.RESET_ALL}")
     
     def clean_environment(self, env_name: str) -> None:
         """Clean build artifacts for an environment"""
         print(f"{Fore.CYAN}🧹 Cleaning {env_name}...{Style.RESET_ALL}")
-        subprocess.run(["platformio", "run", "-t", "clean", "-e", env_name], check=True)
+        subprocess.run([sys.executable, "-m", "platformio", "run", "-t", "clean", "-e", env_name], check=True)
         
         # Remove stamps
         stamp_file = self.project_dir / f".build_stamp_{env_name}"

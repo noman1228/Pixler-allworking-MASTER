@@ -254,7 +254,16 @@ void c_OutputPixel::updateColorOrderOffsets ()
     // DEBUG_V (String (" color_order: ") + color_order);
     // DEBUG_V (String ("_color_order: ") + _color_order);
 
-         if (String (F ("rgb"))  == _color_order) { ColorOffsets.offset.r = 0; ColorOffsets.offset.g = 1; ColorOffsets.offset.b = 2; ColorOffsets.offset.w = 3; NumIntensityBytesPerPixel = 3; }
+         if (MonsterPermanentRgb)
+         {
+             strcpy(color_order, "rgb");
+             ColorOffsets.offset.r = 0;
+             ColorOffsets.offset.g = 1;
+             ColorOffsets.offset.b = 2;
+             ColorOffsets.offset.w = 3;
+             NumIntensityBytesPerPixel = 3;
+         }
+    else if (String (F ("rgb"))  == _color_order) { ColorOffsets.offset.r = 0; ColorOffsets.offset.g = 1; ColorOffsets.offset.b = 2; ColorOffsets.offset.w = 3; NumIntensityBytesPerPixel = 3; }
     else if (String (F ("rbg"))  == _color_order) { ColorOffsets.offset.r = 0; ColorOffsets.offset.g = 2; ColorOffsets.offset.b = 1; ColorOffsets.offset.w = 3; NumIntensityBytesPerPixel = 3; }
     else if (String (F ("gbr"))  == _color_order) { ColorOffsets.offset.r = 2; ColorOffsets.offset.g = 0; ColorOffsets.offset.b = 1; ColorOffsets.offset.w = 3; NumIntensityBytesPerPixel = 3; }
     else if (String (F ("grb"))  == _color_order) { ColorOffsets.offset.r = 1; ColorOffsets.offset.g = 0; ColorOffsets.offset.b = 2; ColorOffsets.offset.w = 3; NumIntensityBytesPerPixel = 3; }
@@ -336,6 +345,7 @@ void c_OutputPixel::SetFrameDurration (float _IntensityBitTimeInUs, uint16_t Blo
     float TotalIntensityBytes       = OutputBufferSize;
     float TotalNullBytes            = (PrependNullPixelCount + AppendNullPixelCount) * NumIntensityBytesPerPixel;
     float TotalBytesOfIntensityData = (TotalIntensityBytes + TotalNullBytes + FramePrependDataSize);
+    if (MonsterPermanentRgb) { TotalBytesOfIntensityData += TotalIntensityBytes + TotalNullBytes; }
     float TotalBits                 = TotalBytesOfIntensityData * 8.0;
     uint16_t NumBlocks              = uint16_t (TotalBytesOfIntensityData / float (BlockSize));
     int TotalBlockDelayUs           = int (float (NumBlocks) * BlockDelayUs);
@@ -404,6 +414,7 @@ void c_OutputPixel::StartNewFrame ()
     FrameStartCounter++;
 #endif // def USE_PIXEL_DEBUG_COUNTERS
 
+    MonsterRecordIndex = 6;
     NextPixelToSend = GetBufferAddress();
     FramePrependDataCurrentIndex    = 0;
     FrameAppendDataCurrentIndex     = 0;
@@ -671,6 +682,38 @@ bool IRAM_ATTR c_OutputPixel::ISR_GetNextIntensityToSend (uint32_t &DataToSend)
     }
 #endif // def USE_PIXEL_DEBUG_COUNTERS
 
+    if (MonsterPermanentRgb)
+    {
+        if (MonsterRecordIndex == 6)
+        {
+            // Decide whether this is white from the original RGB values, before
+            // gamma and brightness can make slightly different channels equal.
+            for (uint8_t i = 0; i < 3; ++i)
+            {
+                MonsterRecord[i] = uint8_t((this->*FrameStateFuncPtr)());
+            }
+            MonsterRecord[3] = 0;
+            MonsterRecord[4] = 0; // Warm white is intentionally unused.
+            MonsterRecord[5] = 0; // Reserved byte is always zero.
+
+            if (MonsterRecord[0] == MonsterRecord[1] && MonsterRecord[1] == MonsterRecord[2])
+            {
+                MonsterRecord[3] = MonsterRecord[0];
+                MonsterRecord[0] = MonsterRecord[1] = MonsterRecord[2] = 0;
+            }
+
+            // Apply the normal pixel correction exactly once after conversion.
+            for (uint8_t i = 0; i < 4; ++i)
+            {
+                MonsterRecord[i] = uint8_t((uint32_t(gamma_table[MonsterRecord[i]]) * AdjustedBrightness) >> 8);
+            }
+            MonsterRecordIndex = 0;
+        }
+
+        DataToSend = MonsterRecord[MonsterRecordIndex++];
+        return ISR_MoreDataToSend();
+    }
+
     DataToSend = (this->*FrameStateFuncPtr)();
 
     if (InvertData)
@@ -801,6 +844,9 @@ void c_OutputPixel::WriteChannelData(uint32_t StartChannelId, uint32_t ChannelCo
     {
         uint32_t CurrentIntensityData = gamma_table[pSourceData[SourceDataIndex]];
         CurrentIntensityData = uint8_t((uint32_t(CurrentIntensityData) * AdjustedBrightness) >> 8);
+        // Monster white detection needs the original RGB values. Correction is
+        // applied once when the six-byte record is assembled for transmission.
+        if (MonsterPermanentRgb) { CurrentIntensityData = pSourceData[SourceDataIndex]; }
         uint32_t CalculatedChannelId = CalculateIntensityOffset(currentChannelId);
         uint8_t *pBuffer = &pOutputBuffer[CalculatedChannelId];
         for(uint32_t CurrentGroupIndex = 0; CurrentGroupIndex < PixelGroupSize; ++CurrentGroupIndex)
@@ -852,7 +898,10 @@ void c_OutputPixel::ReadChannelData(uint32_t StartChannelId, uint32_t ChannelCou
     {
         uint8_t CurrentIntensityData = pOutputBuffer[CalculateIntensityOffset(currentChannelId)];
         // CurrentIntensityData = gamma_table[CurrentIntensityData];
-        CurrentIntensityData = uint8_t((uint32_t(CurrentIntensityData << 8) / AdjustedBrightness));
+        if (!MonsterPermanentRgb)
+        {
+            CurrentIntensityData = uint8_t((uint32_t(CurrentIntensityData << 8) / AdjustedBrightness));
+        }
         pTargetData[SourceDataIndex] = CurrentIntensityData;
     }
 

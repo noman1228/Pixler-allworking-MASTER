@@ -1152,10 +1152,6 @@ void c_FPPDiscovery::GetSysInfoJSON (JsonObject & jsonResponse)
 void c_FPPDiscovery::GetStatusJSON (JsonObject & JsonData, bool adv)
 {
     // DEBUG_START;
-    JsonObject JsonDataMqtt = JsonData[F ("MQTT")].to<JsonObject>();
-
-    JsonWrite(JsonDataMqtt, F ("configured"), false);
-    JsonWrite(JsonDataMqtt, F ("connected"),  false);
 
     JsonObject JsonDataCurrentPlaylist = JsonData[F ("current_playlist")].to<JsonObject> ();
 
@@ -1524,7 +1520,6 @@ void c_FPPDiscovery::GenerateFppSyncMsg(uint8_t Action, const String & FileName,
             udp.writeTo (SyncPacket.raw, sizeof (SyncPacket), IPAddress(IPADDR_BROADCAST), FPP_DISCOVERY_PORT);
         }
     } while(false);
-
 
     // xDEBUG_END;
 } // GenerateFppSyncMsg

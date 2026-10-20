@@ -188,6 +188,10 @@ public:
         OutputType_GRINCH = 15,
         #endif // def SUPPORT_OutputType_GRINCH
 
+        #ifdef SUPPORT_OutputType_MonsterPermanent
+        OutputType_MonsterPermanent = 16,
+        #endif // def SUPPORT_OutputType_MonsterPermanent
+
         // Add new types here
         OutputType_End, // must be last
         OutputType_Start = OutputType_Disabled,

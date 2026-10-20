@@ -22,8 +22,6 @@
 #include "EFUpdate.h"
 #include "output/OutputMgr.hpp"
 #include <ESPAsyncWebServer.h>
-#include <EspalexaDevice.h>
-
 
 class c_WebMgr
 {
@@ -33,11 +31,7 @@ public:
 
     void Begin           (config_t * NewConfig); ///< set up the operating environment based on the current config (or defaults)
     void ValidateConfig  (config_t * NewConfig);
-    void Process         ();
 
-    void onAlexaMessage        (EspalexaDevice * pDevice);
-    void RegisterAlexaCallback (DeviceCallbackFunction cb);
-    bool IsAlexaCallbackValid  () { return (nullptr != pAlexaCallback); }
     void FirmwareUpload        (AsyncWebServerRequest* request, String filename, uint32_t index, uint8_t* data, uint32_t len, bool final);
     void NetworkStateChanged   (bool NewNetworkState);
     void GetDriverName         (String & Name) { Name = "WebMgr"; }
@@ -46,8 +40,6 @@ public:
 private:
 
     EFUpdate               efupdate;
-    DeviceCallbackFunction pAlexaCallback = nullptr;
-    EspalexaDevice *       pAlexaDevice   = nullptr;
     bool                   HasBeenInitialized = false;
 
 #ifdef ARDUINO_ARCH_ESP32

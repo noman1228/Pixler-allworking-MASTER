@@ -170,6 +170,11 @@ typedef enum
 #   error "No valid platform definition"
 #endif // ndef platform specific GPIO definitions
 
+// Monster Permanent uses the same UART/RMT capable output ports as WS2811.
+#if defined(SUPPORT_OutputType_WS2811)
+#   define SUPPORT_OutputType_MonsterPermanent
+#endif
+
 #if defined(SUPPORT_SD) || defined(SUPPORT_SD_MMC)
 #   define SUPPORT_FPP
 #endif // defined(SUPPORT_SD) || defined(SUPPORT_SD_MMC)
