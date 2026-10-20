@@ -23,12 +23,12 @@
     function RefreshRenardRate()
     {
         // +2 is for the Renard frame header
-        // var NumberOfBytesInFrame = parseInt($('#renard #fg_renard #num_chan').val()) + 2;
+        // var NumberOfBytesInFrame = parseInt($('#renard #fg_renard #num_chan').val (), 10) + 2;
         // var BitsPerByte          = 1 + 8 + 2;
-        // var TimePerBit           = 1 / parseInt($('#renard #fg_renard #baudrate').val());
+        // var TimePerBit           = 1 / parseInt($('#renard #fg_renard #baudrate').val(), 10);
         // var TimePerByte          = TimePerBit * BitsPerByte;
         // var TimePerFrame         = TimePerByte * (NumberOfBytesInFrame);
-        var TimePerFrame            = ((1 / parseInt($('#renard #baudrate').val())) * 11) * (parseInt($('#renard #num_chan').val()) + 2);
+        var TimePerFrame            = ((1 / parseInt($('#renard #baudrate').val (), 10)) * 11) * (parseInt($('#renard #num_chan').val (), 10) + 2);
 
         var rateMs = TimePerFrame * 1000;
         var hz     = 1 / TimePerFrame;

@@ -18,11 +18,11 @@
 
     function refreshGeceFrameRate()
     {
-        // var NumberOfPixels = parseInt($('#pixel_count').val());
+        // var NumberOfPixels = parseInt($('#pixel_count').val (), 10);
         // var PixelTime      = 0.00030;
         // var InterFrameGap  = 0.00055;
         // var TimePerFrame   = (PixelTime * NumberOfPixels) + InterFrameGap;
-        var TimePerFrame = (0.00030 * parseInt($('#pixel_count').val())) + 0.00055;
+        var TimePerFrame = (0.00030 * parseInt($('#pixel_count').val (), 10)) + 0.00055;
 
         var rateMs = TimePerFrame * 1000;
         var hz     = 1 / TimePerFrame;

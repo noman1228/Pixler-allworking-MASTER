@@ -401,7 +401,7 @@ $(function ()
     }
 
     $('#v_columns').on('input', function () {
-        $.cookie('DiagColumns', parseInt($('#v_columns').val()));
+        $.cookie('DiagColumns', parseInt($('#v_columns').val(), 10));
         clearStream();
     });
     if(undefined !== $.cookie('DiagColumns'))
@@ -914,7 +914,7 @@ function RequestConfigFile(FileName)
 {
     // console.debug("RequestConfigFile FileName: " + FileName);
     var url = "conf/" + FileName;
-    console.info("RequestConfigFile: 'GET' URL: '" + url + "'");
+    // console.debug("RequestConfigFile: 'GET' URL: '" + url + "'");
 
     $.ajaxQueue(
     {
@@ -1430,7 +1430,7 @@ function MarqueeGroupAddRow(CurrentConfig) {
 
         let CurrentGroupColor = "#" + ((CurrentConfig.color.r * 256 * 256) + (CurrentConfig.color.g * 256) + CurrentConfig.color.b).toString(16);
 
-        while (-1 !== CurrentRowId.indexOf("-")) 
+        while (-1 !== CurrentRowId.indexOf("-"))
         {
             CurrentRowId = CurrentRowId.replace("-", "_");
         }
@@ -1444,18 +1444,18 @@ function MarqueeGroupAddRow(CurrentConfig) {
         let MarqueeGroupColorPattern        = '<td><input  type="color"  class="form-control"          id="MarqueeGroupColor_'        + CurrentRowId + '" value=#999999></input></td>';
         let MarqueeGroupDeletePattern       = '<td><button type="Button" class="btn btn-primary"       id="MarqueeGroupDelete_'       + CurrentRowId + '" RowId="' + CurrentRowId + '">Delete</button></td>';
 
-//      var rowPattern = '<tr>' + StartPattern + EndPattern + StartValuePattern + EndValuePattern + OutputPattern + '</tr>';
+        // var rowPattern = '<tr>' + StartPattern + EndPattern + StartValuePattern + EndValuePattern + OutputPattern + '</tr>';
         let rowPattern = '<tr id="MarqueeGroupRow_' + (CurrentRowId) + '" RowId="' + CurrentRowId + '">' + 
-                          MarqueeGroupIdPattern + 
-                          MarqueeGroupIntensityPattern + 
-                          MarqueeGroupIntensityEndPattern + 
-                          MarqueeGroupCountPattern + 
-                          MarqueeGroupColorPattern + 
-                          MarqueeGroupDeletePattern + 
+                          MarqueeGroupIdPattern +
+                          MarqueeGroupIntensityPattern +
+                          MarqueeGroupIntensityEndPattern +
+                          MarqueeGroupCountPattern +
+                          MarqueeGroupColorPattern +
+                          MarqueeGroupDeletePattern +
                           '</tr> ';
         $('#MarqueeGroupTable tbody tr:last').after(rowPattern);
         $('#MarqueeGroupDelete_' + CurrentRowId).on("click", function () { MarqueeGroupDeleteRow($(this)); });
-        
+
         $('#MarqueeGroupIntensity_' + (CurrentRowId)).val(CurrentConfig.brightness);
         $('#MarqueeGroupIntensityEnd_' + (CurrentRowId)).val(CurrentConfig.brightnessEnd);
         $('#MarqueeGroupCount_' + (CurrentRowId)).val(CurrentConfig.pixel_count);
@@ -1498,29 +1498,29 @@ function RenumberMarqueeGroupTable() {
 
 } // RenumberMarqueeGroupTable
 
-function ProcessModeConfigurationDataRelay(RelayConfig) {
-    // console.log("relaychannelconfigurationtable.rows.length = " + $('#relaychannelconfigurationtable tr').length);
-
+function ProcessModeConfigurationDataRelay(modeControlName, RelayConfig) {
+    // console.debug("modeControlName: " + modeControlName);
+    // console.log("relaychannelconfigurationtable.rows.length = " + $(modeControlName + ' #relaychannelconfigurationtable tr').length);
     let ChannelConfigs = RelayConfig.channels;
 
     let HasPwmFrequency = false;
-    if ({}.hasOwnProperty.call(ChannelConfigs[0], "Frequency")) {
+    if ({}.hasOwnProperty.call(ChannelConfigs[0] || {}, "Frequency")) {
         HasPwmFrequency = true;
-        $("#Frequency_hr").removeClass("hidden");
+        $(modeControlName + " #Frequency_hr").removeClass("hidden");
     }
     else {
-        $("#Frequency_hr").addClass("hidden");
+        $(modeControlName + " #Frequency_hr").addClass("hidden");
     }
 
     // clear the existing entries
-    $('#relaychannelconfigurationtable tbody').empty();
+    $(modeControlName + ' #relaychannelconfigurationtable').empty();
 
     // add as many rows as we need
     for (let CurrentRowId = 0; CurrentRowId < ChannelConfigs.length; CurrentRowId++) {
         // console.log("CurrentRowId = " + CurrentRowId);
 
-        let ChanIdPattern = '<td id="chanId_' + (CurrentRowId) + '">a</td>';
-        let EnabledPattern = '<td><input type="checkbox" id="Enabled_' + (CurrentRowId) + '"></td>';
+        // let ChanIdPattern = '<td id="chanId_' + (CurrentRowId) + '">a</td>';
+        // let EnabledPattern = '<td><input type="checkbox" id="Enabled_' + (CurrentRowId) + '"></td>';
         let EnabledHttpPattern = '<td><input type="checkbox" id="EnabledHttp_' + (CurrentRowId) + '"></td>';
         let InvertedPattern = '<td><input type="checkbox" id="Inverted_' + (CurrentRowId) + '"></td>';
         let PwmPattern = '<td><input type="checkbox" id="Pwm_' + (CurrentRowId) + '"></td>';
@@ -1531,18 +1531,18 @@ function ProcessModeConfigurationDataRelay(RelayConfig) {
             PwmFreqPattern = '<td><input type="number"   id="Frequency_' + (CurrentRowId) + '"step="1" min="100" max="19000" value="19000" class="form-control is-valid"></td>';
         }
 
-        let rowPattern = '<tr>' + ChanIdPattern + EnabledPattern + EnabledHttpPattern + InvertedPattern + PwmPattern + gpioPattern + threshholdPattern + PwmFreqPattern + '</tr>';
-        $('#relaychannelconfigurationtable tr:last').after(rowPattern);
+        let rowPattern = '<tr>' /*+ ChanIdPattern + EnabledPattern*/ + EnabledHttpPattern + InvertedPattern + PwmPattern + gpioPattern + threshholdPattern + PwmFreqPattern + '</tr>';
+        $(modeControlName + ' #relaychannelconfigurationtable').append(rowPattern);
 
-        $('#chanId_'      + CurrentRowId).attr('style', $('#chanId_hr').attr('style'));
-        $('#Enabled_'     + CurrentRowId).attr('style', $('#Enabled_hr').attr('style'));
-        $('#EnabledHttp_' + CurrentRowId).attr('style', $('#EnabledHttp_hr').attr('style'));
-        $('#Inverted_'    + CurrentRowId).attr('style', $('#Inverted_hr').attr('style'));
-        $('#Pwm_'         + CurrentRowId).attr('style', $('#Pwm_hr').attr('style'));
-        $('#gpioId_'      + CurrentRowId).attr('style', $('#gpioId_hr').attr('style'));
-        $('#threshhold_'  + CurrentRowId).attr('style', $('#threshhold_hr').attr('style'));
+        // $('#chanId_'      + CurrentRowId).attr('style', $('#chanId_hr').attr('style'));
+        // $('#Enabled_'     + CurrentRowId).attr('style', $('#Enabled_hr').attr('style'));
+        $(modeControlName + ' #EnabledHttp_' + CurrentRowId).attr('style', $(modeControlName + ' #EnabledHttp_hr').attr('style'));
+        $(modeControlName + ' #Inverted_'    + CurrentRowId).attr('style', $(modeControlName + ' #Inverted_hr').attr('style'));
+        $(modeControlName + ' #Pwm_'         + CurrentRowId).attr('style', $(modeControlName + ' #Pwm_hr').attr('style'));
+        $(modeControlName + ' #gpioId_'      + CurrentRowId).attr('style', $(modeControlName + ' #gpioId_hr').attr('style'));
+        $(modeControlName + ' #threshhold_'  + CurrentRowId).attr('style', $(modeControlName + ' #threshhold_hr').attr('style'));
         if (true === HasPwmFrequency) {
-            $('#Frequency_' + CurrentRowId).attr('style', $('#Frequency_hr').attr('style'));
+            $(modeControlName + ' #Frequency_' + CurrentRowId).attr('style', $(modeControlName + ' #Frequency_hr').attr('style'));
         }
     }
 
@@ -1551,15 +1551,16 @@ function ProcessModeConfigurationDataRelay(RelayConfig) {
         let currentChannelRowId = CurrentChannelConfig.id;
         // console.log("Populate Config Current Channel Id = " + CurrentChannelConfig.id);
         // console.log("Populate Config Current gid = " + CurrentChannelConfig.gid);
-        $('#chanId_'      + (currentChannelRowId)).html(currentChannelRowId + 1);
-        $('#Enabled_'     + (currentChannelRowId)).prop("checked", CurrentChannelConfig.en);
-        $('#EnabledHttp_' + (currentChannelRowId)).prop("checked", CurrentChannelConfig.enhttp);
-        $('#Inverted_'    + (currentChannelRowId)).prop("checked", CurrentChannelConfig.inv);
-        $('#Pwm_'         + (currentChannelRowId)).prop("checked", CurrentChannelConfig.pwm);
-        $('#gpioId_'      + (currentChannelRowId)).val(CurrentChannelConfig.gid);
-        $('#threshhold_'  + (currentChannelRowId)).val(CurrentChannelConfig.trig);
-        if (true === HasPwmFrequency) {
-            $('#Frequency_' + (currentChannelRowId)).val(CurrentChannelConfig.Frequency);
+        // $(modeControlName + ' #chanId_'      + (currentChannelRowId)).html(currentChannelRowId + 1);
+        // $(modeControlName + '#Enabled_'     + (currentChannelRowId)).prop("checked", CurrentChannelConfig.en);
+        $(modeControlName + ' #EnabledHttp_' + (currentChannelRowId)).prop("checked", CurrentChannelConfig.enhttp);
+        $(modeControlName + ' #Inverted_'    + (currentChannelRowId)).prop("checked", CurrentChannelConfig.inv);
+        $(modeControlName + ' #Pwm_'         + (currentChannelRowId)).prop("checked", CurrentChannelConfig.pwm);
+        $(modeControlName + ' #gpioId_'      + (currentChannelRowId)).val(CurrentChannelConfig.gid);
+        $(modeControlName + ' #threshhold_'  + (currentChannelRowId)).val(CurrentChannelConfig.trig);
+        if (true === HasPwmFrequency)
+        {
+            $(modeControlName + ' #Frequency_' + (currentChannelRowId)).val(CurrentChannelConfig.Frequency);
         }
     });
 
@@ -1649,6 +1650,40 @@ function ProcessInputConfig() {
 
 } // ProcessInputConfig
 
+function ProcessConfigElements(StartingElementId, channelConfig)
+{
+    const root = $(StartingElementId);
+    // Output forms reuse IDs; keep every field scoped to its channel.
+    root.find(':input[id]').each(function () {
+        const field = $(this);
+        const name = field.attr('id');
+        field.attr('path', StartingElementId);
+        if (!Object.prototype.hasOwnProperty.call(channelConfig, name)) return;
+        if (field.is(':checkbox')) field.prop('checked', channelConfig[name]);
+        else field.val(channelConfig[name]);
+    });
+    root.find('.loadable').each(function () {
+        const holder = this;
+        const elementId = $(holder).attr('id');
+        const loadLocation = StartingElementId + ' #' + elementId;
+        $(holder).load(elementId + '.html', function (response, status) {
+            // Ignore responses for a mode that has since been replaced.
+            if (!document.documentElement.contains(holder)) return;
+            if (status === 'error') {
+                console.error('Unable to load configuration controls:', elementId);
+                return;
+            }
+            ProcessConfigElements(loadLocation, channelConfig);
+            UpdateAdvancedOptionsMode();
+            if (AdminInfo && AdminInfo.arch === 'ESP8266') $(holder).find('.esp32').addClass('hidden');
+            if (AdminInfo && AdminInfo.arch === 'ESP32') $(holder).find('.esp8266').addClass('hidden');
+        });
+    });
+    if (root.find('#pixel_count').length && root.find('#groups').length) {
+        PixelCountOnChange(root.find('#pixel_count')[0]);
+    }
+} // ProcessConfigElements
+
 function ProcessModeConfigurationData(channelId, ChannelType, JsonConfig) {
     // console.debug("ProcessModeConfigurationData: Start");
     // console.debug("channelId: " + channelId);
@@ -1670,7 +1705,6 @@ function ProcessModeConfigurationData(channelId, ChannelType, JsonConfig) {
     ChannelTypeName = ChannelTypeName.replace(" ", "_");
     // console.debug("ChannelTypeName: " + ChannelTypeName);
 
-    let elementids = [];
     let modeControlName = '#' + ChannelType + 'mode' + channelId;
     // console.debug("modeControlName: " + modeControlName);
 
@@ -1682,20 +1716,7 @@ function ProcessModeConfigurationData(channelId, ChannelType, JsonConfig) {
         // console.debug("ModeDisplayName: " + ModeDisplayName);
         $(modeControlName + ' #Title')[0].innerHTML = ModeDisplayName;
     }
-
-    elementids = $(modeControlName + ' *[id]').filter(":input").map(function () {
-        return $(this).attr('id');
-    }).get();
-
-    elementids.forEach(function (elementid) {
-        let SelectedElement = modeControlName + ' #' + elementid;
-        if ($(SelectedElement).is(':checkbox')) {
-            $(SelectedElement).prop('checked', channelConfig[elementid]);
-        }
-        else {
-            $(SelectedElement).val(channelConfig[elementid]);
-        }
-    });
+    ProcessConfigElements(modeControlName, channelConfig);
 
     // by default, do not show the ECB config data
     $('#ecb').addClass("hidden");
@@ -1722,7 +1743,7 @@ function ProcessModeConfigurationData(channelId, ChannelType, JsonConfig) {
 
     else if ("relay" === ChannelTypeName) {
         // console.debug("ProcessModeConfigurationData: relay");
-        ProcessModeConfigurationDataRelay(channelConfig);
+        ProcessModeConfigurationDataRelay(modeControlName, channelConfig);
     }
 
     else if ("servo_pca9685" === ChannelTypeName) {
@@ -1750,7 +1771,7 @@ function ProcessReceivedJsonConfigMessage(JsonConfigData) {
     {
         // save the config for later use.
         Output_Config = JsonConfigData.output_config;
-        // console.debug("Got Output Config: " + JSON.stringify(Output_Config) );
+        // console.debug(JSON.stringify(Output_Config) );
         CreateOptionsFromConfig("output", Output_Config);
     }
 
@@ -1804,6 +1825,18 @@ function ProcessReceivedJsonConfigMessage(JsonConfigData) {
         }
         else {
             $('#TemperatureSensorGrp').addClass("hidden");
+        }
+
+        if ({}.hasOwnProperty.call(System_Config.device, 'sd_pwr_pin'))
+        {
+            $('#SdPowerControlGrp').removeClass("hidden");
+            $('#config #device #sd_pwr_pin').val(System_Config.device.sd_pwr_pin);
+            $('#config #device #sd_pwr_on').val(System_Config.device.sd_pwr_on);
+            $('#config #device #sd_pwr_dly').val(System_Config.device.sd_pwr_dly);
+        }
+        else
+        {
+            $('#SdPowerControlGrp').addClass("hidden");
         }
     }
 
@@ -1859,7 +1892,7 @@ function updateFromJSON(obj) {
 } // updateFromJSON
 
 function GenerateInputOutputControlLabel(OptionListName, DisplayedChannelId) {
-    let Id = parseInt(DisplayedChannelId) + 1;
+    let Id = parseInt(DisplayedChannelId, 10) + 1;
     let NewName = '';
     //TODO: Dirty Hack to clean-up Input lables
     if (OptionListName === `input`) {
@@ -1880,7 +1913,7 @@ function loadContentSync(url, targetElement, OptionListName, DisplayedChannelId)
         async: false,
         success: function(data)
         {
-            // console.info("Process Received Mode Config file.");
+            // console.debug("Process Received Mode Config file.");
             $(targetElement).html(data);
             if ("input" === OptionListName)
             {
@@ -1976,7 +2009,7 @@ function CreateOptionsFromConfig(OptionListName, Config) {
 function ExtractNetworkWiFiConfigFromHtmlPage() {
     let wifi = System_Config.network.wifi;
 
-    wifi.sta_timeout = parseInt($('#network #wifi #sta_timeout').val());
+    wifi.sta_timeout = parseInt($('#network #wifi #sta_timeout').val(), 10);
     wifi.ip = $('#network #wifi #ip').val();
     wifi.netmask = $('#network #wifi #netmask').val();
     wifi.gateway = $('#network #wifi #gateway').val();
@@ -1985,10 +2018,10 @@ function ExtractNetworkWiFiConfigFromHtmlPage() {
     wifi.dhcp = $('#network #wifi #dhcp').prop('checked');
     wifi.ap_ssid = $('#network #wifi #ap_ssid').val();
     wifi.ap_passphrase = $('#network #wifi #ap_passphrase').val();
-    wifi.ap_channel = parseInt($('#network #wifi #ap_channel').val());
+    wifi.ap_channel = parseInt($('#network #wifi #ap_channel').val(), 10);
     wifi.ap_fallback = $('#network #wifi #ap_fallback').prop('checked');
     wifi.ap_reboot = $('#network #wifi #ap_reboot').prop('checked');
-    wifi.ap_timeout = parseInt($('#network #wifi #ap_timeout').val());
+    wifi.ap_timeout = parseInt($('#network #wifi #ap_timeout').val(), 10);
     wifi.StayInApMode = $('#network #wifi #StayInApMode').prop('checked');
 
     let CurrentRowId = 0;
@@ -2011,13 +2044,13 @@ function ExtractNetworkEthernetConfigFromHtmlPage() {
         System_Config.network.eth.dnss = $('#network #eth #dnss').val();
         System_Config.network.eth.dhcp = $('#network #eth #dhcp').prop('checked');
         System_Config.network.eth.type = parseInt($('#network #eth #type option:selected').val(), 10);
-        System_Config.network.eth.addr = parseInt($('#network #eth #addr').val());
-        System_Config.network.eth.power_pin = parseInt($('#network #eth #power_pin').val());
-        System_Config.network.eth.mode = parseInt($('#network #eth #mode option:selected').val());
-        System_Config.network.eth.mdc_pin = parseInt($('#network #eth #mdc_pin').val());
-        System_Config.network.eth.mdio_pin = parseInt($('#network #eth #mdio_pin').val());
+        System_Config.network.eth.addr = parseInt($('#network #eth #addr').val(), 10);
+        System_Config.network.eth.power_pin = parseInt($('#network #eth #power_pin').val(), 10);
+        System_Config.network.eth.mode = parseInt($('#network #eth #mode option:selected').val(), 10);
+        System_Config.network.eth.mdc_pin = parseInt($('#network #eth #mdc_pin').val(), 10);
+        System_Config.network.eth.mdio_pin = parseInt($('#network #eth #mdio_pin').val(), 10);
         System_Config.network.eth.activevalue = (parseInt($('#network #eth #activevalue option:selected').val(), 10) === 1);
-        System_Config.network.eth.activedelay = parseInt($('#network #eth #activedelay').val());
+        System_Config.network.eth.activedelay = parseInt($('#network #eth #activedelay').val(), 10);
     }
 
 } // ExtractNetworkEthernetConfigFromHtmlPage
@@ -2034,18 +2067,25 @@ function ExtractNetworkConfigFromHtmlPage() {
 // Builds JSON config submission for "WiFi" tab
 function submitNetworkConfig() {
     System_Config.device.id = $('#config #device #id').val();
-    System_Config.device.blanktime = parseInt($('#config #device #blanktime').val());
-    System_Config.device.miso_pin = parseInt($('#config #device #miso_pin').val());
-    System_Config.device.mosi_pin = parseInt($('#config #device #mosi_pin').val());
-    System_Config.device.clock_pin = parseInt($('#config #device #clock_pin').val());
-    System_Config.device.cs_pin = parseInt($('#config #device #cs_pin').val());
-    System_Config.device.sdspeed = parseInt($('#config #device #sdspeed').val());
+    System_Config.device.blanktime = parseInt($('#config #device #blanktime').val(), 10);
+    System_Config.device.miso_pin = parseInt($('#config #device #miso_pin').val(), 10);
+    System_Config.device.mosi_pin = parseInt($('#config #device #mosi_pin').val(), 10);
+    System_Config.device.clock_pin = parseInt($('#config #device #clock_pin').val(), 10);
+    System_Config.device.cs_pin = parseInt($('#config #device #cs_pin').val(), 10);
+    System_Config.device.sdspeed = parseInt($('#config #device #sdspeed').val(), 10);
     System_Config.device.user = $('#ftpusername').val();
     System_Config.device.password = $('#ftppassword').val();
     System_Config.device.enabled = $('#ftp_enable').prop('checked');
 
+    if ({}.hasOwnProperty.call(System_Config.device, 'sd_pwr_pin'))
+    {
+        System_Config.device.sd_pwr_pin = parseInt($('#config #device #sd_pwr_pin').val(), 10);
+        System_Config.device.sd_pwr_on  = parseInt($('#config #device #sd_pwr_on').val(), 10);
+        System_Config.device.sd_pwr_dly = parseInt($('#config #device #sd_pwr_dly').val(), 10);
+    }
+
     if ({}.hasOwnProperty.call(System_Config, 'sensor')) {
-        System_Config.sensor.units = parseInt($('#TemperatureSensorUnits').val());
+        System_Config.sensor.units = parseInt($('#TemperatureSensorUnits').val(), 10);
     }
 
     ExtractNetworkConfigFromHtmlPage();
@@ -2057,59 +2097,76 @@ function ExtractChannelConfigFromHtmlPage(JsonConfig, SectionName) {
     // for each option channel:
     jQuery.each(JsonConfig, function (DisplayedChannelId, CurrentChannelConfigurationData) {
         let elementids = [];
-        let modeControlName = '#' + SectionName + 'mode' + DisplayedChannelId;
+        let modeControlName = '#' + SectionName + 'mode' + DisplayedChannelId + ' ';
         elementids = $(modeControlName + ' *[id]').filter(":input").map(function ()
         {
             return $(this).attr('id');
         }).get();
 
-        // console.debug("modeControlName: " + modeControlName);
+        // console.debug("modeControlName: '" + modeControlName + "'");
 
         let ChannelType = parseInt($("#" + SectionName + DisplayedChannelId + " option:selected").val(), 10);
         let ChannelConfig = CurrentChannelConfigurationData[ChannelType];
 
         // tell the ESP what type of channel it should be using
         CurrentChannelConfigurationData.type = ChannelType;
-
-        if ((ChannelConfig.type === "Relay") && ($("#relaychannelconfigurationtable").length)) {
-            ChannelConfig.updateinterval = parseInt($('#updateinterval').val(), 10);
-            $.each(ChannelConfig.channels, function (i, CurrentChannelConfig) {
-                // console.debug("Current Channel Id = " + CurrentChannelConfig.id);
-                let currentChannelRowId     = CurrentChannelConfig.id;
-                CurrentChannelConfig.en     = $('#Enabled_' + (currentChannelRowId)).prop("checked");
-                CurrentChannelConfig.enhttp = $('#EnabledHttp_' + (currentChannelRowId)).prop("checked");
-                CurrentChannelConfig.inv    = $('#Inverted_' + (currentChannelRowId)).prop("checked");
-                CurrentChannelConfig.pwm    = $('#Pwm_' + (currentChannelRowId)).prop("checked");
-                CurrentChannelConfig.gid    = parseInt($('#gpioId_' + (currentChannelRowId)).val(), 10);
-                CurrentChannelConfig.trig   = parseInt($('#threshhold_' + (currentChannelRowId)).val(), 10);
-
-                if ({}.hasOwnProperty.call(ChannelConfig, "Frequency")) {
-                    CurrentChannelConfig.Frequency = parseInt($('#Frequency_' + (currentChannelRowId)).val(), 10);
-                }
-            });
-        }
-        else if ((ChannelConfig.type === "Servo PCA9685") && ($("#servo_pca9685channelconfigurationtable").length)) {
-            ChannelConfig.updateinterval = parseInt($('#updateinterval').val(), 10);
-            $.each(ChannelConfig.channels, function (i, CurrentChannelConfig)
+        if('output' === SectionName)
+        {
+            if ((ChannelConfig.type === "Relay") && ($(modeControlName + "#relaychannelconfigurationtable").length))
             {
-                // console.debug("Current Channel Id = " + CurrentChannelConfig.id);
-                let currentChannelRowId = CurrentChannelConfig.id + 1;
-                CurrentChannelConfig.en = $('#ServoEnabled_' + (currentChannelRowId)).prop("checked");
-                CurrentChannelConfig.Min = parseInt($('#ServoMinLevel_' + (currentChannelRowId)).val(), 10);
-                CurrentChannelConfig.Max = parseInt($('#ServoMaxLevel_' + (currentChannelRowId)).val(), 10);
-                CurrentChannelConfig.hv = parseInt($('#ServoHomeValue_' + (currentChannelRowId)).val(), 10);
-                let ServoDataType = parseInt($('#ServoDataType_' + (currentChannelRowId)).val(), 10);
+                ChannelConfig.updateinterval = parseInt($(modeControlName + '#updateinterval').val(), 10);
+                $.each(ChannelConfig.channels, function (i, CurrentChannelConfig)
+                {
+                    // console.debug("Current Channel Id = " + CurrentChannelConfig.id);
+                    let currentChannelRowId     = CurrentChannelConfig.id;
+                    // CurrentChannelConfig.en     = $('#Enabled_' + (currentChannelRowId)).prop("checked");
+                    CurrentChannelConfig.enhttp = $(modeControlName + '#EnabledHttp_' + (currentChannelRowId)).prop("checked");
+                    CurrentChannelConfig.inv    = $(modeControlName + '#Inverted_' + (currentChannelRowId)).prop("checked");
+                    CurrentChannelConfig.pwm    = $(modeControlName + '#Pwm_' + (currentChannelRowId)).prop("checked");
+                    CurrentChannelConfig.gid    = parseInt($(modeControlName + '#gpioId_' + (currentChannelRowId)).val(), 10);
+                    CurrentChannelConfig.trig   = parseInt($(modeControlName + '#threshhold_' + (currentChannelRowId)).val(), 10);
 
-                CurrentChannelConfig.rev = (ServoDataType & 0x01) ? true : false;
-                CurrentChannelConfig.sca = (ServoDataType & 0x02) ? true : false;
-                CurrentChannelConfig.b16 = (ServoDataType & 0x04) ? true : false;
-                // console.debug("CurrentChannelConfig.id: " + CurrentChannelConfig.id);
-                // console.debug("CurrentChannelConfig.rev: " + CurrentChannelConfig.rev);
-                // console.debug("CurrentChannelConfig.sca: " + CurrentChannelConfig.sca);
-                // console.debug("CurrentChannelConfig.b16: " + CurrentChannelConfig.b16);
-            });
+                    if ({}.hasOwnProperty.call(CurrentChannelConfig, "Frequency"))
+                    {
+                        CurrentChannelConfig.Frequency = parseInt($(modeControlName + ' #Frequency_' + (currentChannelRowId)).val(), 10);
+                    }
+                });
+            }
+            else if ((ChannelConfig.type === "Servo PCA9685") && ($("#servo_pca9685channelconfigurationtable").length)) {
+                ChannelConfig.updateinterval = parseInt($('#updateinterval').val(), 10);
+                $.each(ChannelConfig.channels, function (i, CurrentChannelConfig)
+                {
+                    // console.debug("Current Channel Id = " + CurrentChannelConfig.id);
+                    let currentChannelRowId = CurrentChannelConfig.id + 1;
+                    CurrentChannelConfig.en = $('#ServoEnabled_' + (currentChannelRowId)).prop("checked");
+                    CurrentChannelConfig.Min = parseInt($('#ServoMinLevel_' + (currentChannelRowId)).val(), 10);
+                    CurrentChannelConfig.Max = parseInt($('#ServoMaxLevel_' + (currentChannelRowId)).val(), 10);
+                    CurrentChannelConfig.hv = parseInt($('#ServoHomeValue_' + (currentChannelRowId)).val(), 10);
+                    let ServoDataType = parseInt($('#ServoDataType_' + (currentChannelRowId)).val(), 10);
+
+                    CurrentChannelConfig.rev = (ServoDataType & 0x01) ? true : false;
+                    CurrentChannelConfig.sca = (ServoDataType & 0x02) ? true : false;
+                    CurrentChannelConfig.b16 = (ServoDataType & 0x04) ? true : false;
+                    // console.debug("CurrentChannelConfig.id: " + CurrentChannelConfig.id);
+                    // console.debug("CurrentChannelConfig.rev: " + CurrentChannelConfig.rev);
+                    // console.debug("CurrentChannelConfig.sca: " + CurrentChannelConfig.sca);
+                    // console.debug("CurrentChannelConfig.b16: " + CurrentChannelConfig.b16);
+                });
+            }
+            else if(ChannelConfig.type === "Grinch")
+            {
+                ChannelConfig.count             = parseInt($('#grinch #controller_count' ).val(), 10);
+                ChannelConfig.dataspi.cs_pin    = parseInt($('#grinch #cs_pin' ).val(), 10);
+                ChannelConfig.dataspi.clock_pin = parseInt($('#grinch #clock_pin' ).val(), 10);
+                ChannelConfig.dataspi.data_pin  = parseInt($('#grinch #data_pin' ).val(), 10);
+            }
+            else
+            {
+                ExtractConfigFromHtmlPages(elementids, modeControlName, ChannelConfig);
+            }
         }
-        else if (ChannelConfig.type === "Effects") {
+        else if (ChannelConfig.type === "Effects")
+        {
             // transitions need extra processing
             ExtractConfigFromHtmlPages(elementids, modeControlName, ChannelConfig);
 
@@ -2204,13 +2261,6 @@ function ExtractChannelConfigFromHtmlPage(JsonConfig, SectionName) {
 
             ChannelConfig.MarqueeGroups = MarqueeGroups;
         }
-        else if(ChannelConfig.type === "Grinch")
-        {
-            ChannelConfig.count             = parseInt($('#grinch #controller_count' ).val());
-            ChannelConfig.dataspi.cs_pin    = parseInt($('#grinch #cs_pin' ).val());
-            ChannelConfig.dataspi.clock_pin = parseInt($('#grinch #clock_pin' ).val());
-            ChannelConfig.dataspi.data_pin  = parseInt($('#grinch #data_pin' ).val());
-        }
         else
         {
             ExtractConfigFromHtmlPages(elementids, modeControlName, ChannelConfig);
@@ -2259,7 +2309,7 @@ function ExtractConfigFromHtmlPages(elementids, modeControlName, ChannelConfig)
             }
             else
             {
-                ChannelConfig[elementid] = parseInt(inputValue);
+                ChannelConfig[elementid] = parseInt(inputValue, 10);
             }
         }
         else
@@ -2299,12 +2349,12 @@ function submitDeviceConfig()
     ExtractChannelConfigFromHtmlPage(Input_Config.channels, "input");
 
     Input_Config.ecb.enabled = $('#ecb_enable').is(':checked');
-    Input_Config.ecb.id = parseInt($('#ecb_gpioid').val());
+    Input_Config.ecb.id = parseInt($('#ecb_gpioid').val(), 10);
     Input_Config.ecb.polarity = $("#ecb_polarity").val();
-    Input_Config.ecb.long = parseInt($("#ecb_longPress").val());
+    Input_Config.ecb.long = parseInt($("#ecb_longPress").val(), 10);
 
     if ({}.hasOwnProperty.call(System_Config, 'sensor')) {
-        System_Config.sensor.units = parseInt($('#TemperatureSensorUnits').val());
+        System_Config.sensor.units = parseInt($('#TemperatureSensorUnits').val(), 10);
     }
 
     ExtractChannelConfigFromHtmlPage(Output_Config.channels, "output");
@@ -2327,10 +2377,10 @@ function MonitorServerConnection()
     // console.debug("MonitorServerConnection");
     if(null === ServerTransactionTimer)
     {
-        // console.info("MonitorServerConnection: Expired");
-        // console.info("PreviousMonitorTransactionRequestInProgressId: " + PreviousMonitorTransactionRequestInProgressId);
-        // console.info("        MonitorTransactionRequestInProgressId: " + MonitorTransactionRequestInProgressId);
-        // console.info("            FailedToCompleteServerTransaction: " + FailedToCompleteServerTransaction);
+        // console.debug("MonitorServerConnection: Expired");
+        // console.debug("PreviousMonitorTransactionRequestInProgressId: " + PreviousMonitorTransactionRequestInProgressId);
+        // console.debug("        MonitorTransactionRequestInProgressId: " + MonitorTransactionRequestInProgressId);
+        // console.debug("            FailedToCompleteServerTransaction: " + FailedToCompleteServerTransaction);
 
         if(PreviousMonitorTransactionRequestInProgressId === MonitorTransactionRequestInProgressId)
         {
@@ -2351,7 +2401,7 @@ function MonitorServerConnection()
 } // MonitorServerConnection
 
 function drawStream(streamData) {
-    let cols = parseInt($('#v_columns').val());
+    let cols = parseInt($('#v_columns').val(), 10);
     let size = Math.floor((canvas.width - 20) / cols);
     let maxDisplay = 0;
 
@@ -2574,7 +2624,7 @@ function ProcessReceivedJsonStatusMessage(JsonStat) {
         $('#pkts').text(InputStatus.e131.num_packets);
         $('#chanlim').text(InputStatus.e131.unichanlim);
         $('#perr').text(InputStatus.e131.packet_errors);
-        $('#clientip').text(int2ip(parseInt(InputStatus.e131.last_clientIP)));
+        $('#clientip').text(int2ip(parseInt(InputStatus.e131.last_clientIP, 10)));
     }
     else {
         $('#E131Status').addClass("hidden")
@@ -2608,8 +2658,14 @@ function ProcessReceivedJsonStatusMessage(JsonStat) {
     }
 
     InputStatus = Status.input[1];
+    $('#LocalPlayListPlayerStatus').addClass("hidden");
+    $('#LocalFilePlayerStatus').addClass("hidden");
+    $('#LocalEffectPlayerStatus').addClass("hidden");
+    $('#PausedPlayerStatus').addClass("hidden");
+    $('#FPPRemoteStatus').addClass("hidden");
 
-    if ({}.hasOwnProperty.call(InputStatus, 'Player')) {
+    if ({}.hasOwnProperty.call(InputStatus, 'Player'))
+    {
         let PlayerStatus = InputStatus.Player;
         if ({}.hasOwnProperty.call(PlayerStatus, 'FPPDiscovery')) {
             $('#FPPRemoteStatus').removeClass("hidden")
@@ -2626,12 +2682,10 @@ function ProcessReceivedJsonStatusMessage(JsonStat) {
             $('#fppremoteFilePlayerTimeRemaining').text(FPPDstatus.time_remaining);
             $('#fppremoteFilePlayerlasterror').text(FPPDstatus.errors);
         }
-        else {
-            $('#FPPRemoteStatus').addClass("hidden")
-        }
 
-        if ({}.hasOwnProperty.call(PlayerStatus, 'File')) {
+        else if ({}.hasOwnProperty.call(PlayerStatus, 'File')) {
             $('#LocalFilePlayerStatus').removeClass("hidden");
+            $('#localFilePlayerlasterror').removeClass("hidden");
 
             let FilePlayerStatus = PlayerStatus.File;
             $('#localFilePlayerFilename').text(FilePlayerStatus.current_sequence);
@@ -2639,6 +2693,24 @@ function ProcessReceivedJsonStatusMessage(JsonStat) {
             $('#localFilePlayerTimeRemaining').text(FilePlayerStatus.time_remaining);
             $('#localFilePlayerPlayedfilecount').text(FilePlayerStatus.count);
             $('#localFilePlayerlasterror').text(FilePlayerStatus.errors);
+        }
+        else if (Object.prototype.hasOwnProperty.call(PlayerStatus, 'PlayList')) {
+            const playlist = PlayerStatus.PlayList;
+            $('#LocalPlayListPlayerStatus').removeClass('hidden');
+            $('#localPlayListName').text(playlist.name);
+            $('#localPlayListEntry').text(playlist.entry);
+            $('#localPlayListCount').text(playlist.count);
+            $('#localPlayListRepeat').text(playlist.repeat ?? '');
+            $('#xfppremotelasterror').text(playlist.errors ?? '');
+            if (playlist.File) {
+                const file = playlist.File;
+                $('#LocalFilePlayerStatus').removeClass('hidden');
+                $('#localFilePlayerlasterror').addClass('hidden');
+                $('#localFilePlayerFilename').text(file.current_sequence);
+                $('#localFilePlayerTimeElapsed').text(file.time_elapsed);
+                $('#localFilePlayerTimeRemaining').text(file.time_remaining);
+                $('#localFilePlayerPlayedfilecount').text(file.PlayedFileCount ?? file.count);
+            }
         }
         else {
             $('#LocalFilePlayerStatus').addClass("hidden");

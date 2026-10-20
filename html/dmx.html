@@ -13,13 +13,13 @@
 <script>
     function refreshDmxFrameRate()
     {
-        // var NumberOfBytesInFrame = parseInt($('#dmx #fg_dmx #num_chan').val());
+        // var NumberOfBytesInFrame = parseInt($('#dmx #fg_dmx #num_chan').val (), 10);
         // var InterFrameDelay      = 0.00005;    // 50us
         // var BitsPerByte          = 1 + 8 + 1;  // Start + data + Stop
         // var TimePerBit           = 1 / 250000; // fixed data rate
         // var TimePerByte          = TimePerBit * BitsPerByte;
         // var TimePerFrame         = (TimePerByte * NumberOfBytesInFrame) + InterFrameDelay;
-        var TimePerFrame         = (0.000044 * parseInt($('#dmx #num_chan').val())) + 0.00005;
+        var TimePerFrame         = (0.000044 * parseInt($('#dmx #num_chan').val (), 10)) + 0.00005;
 
         var rateMs = TimePerFrame * 1000;
         var hz     = 1 / TimePerFrame;

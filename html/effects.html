@@ -12,6 +12,13 @@
     </div>
 
     <div class="form-group">
+        <label class="control-label col-sm-2" for="EffectChannelMode">Channel Mode</label>
+        <div class="col-sm-4">
+            <select class="form-control is-valid" id="EffectChannelMode">
+                <option value="0">Channels</option>
+                <option value="1">Pixels</option>
+            </select>
+        </div>
         <label class="control-label col-sm-2" for="EffectSpeed">Speed</label>
         <div class="col-sm-4">
             <input type="number" class="form-control is-valid" id="EffectSpeed" step="1" min="1" max="10" value="0"
@@ -63,12 +70,12 @@
                 </thead>
                 <tbody>
                     <td><input type="checkbox" id="FlashEnable"></td>
-                    <td><input type="number" class="form-control is-valid" id="FlashMinInt"   step="1" min="20"  max="100"    value=50></td>';
-                    <td><input type="number" class="form-control is-valid" id="FlashMaxInt"   step="1" min="20"  max="100"    value=100></td>';
-                    <td><input type="number" class="form-control is-valid" id="FlashMinDelay" step="1" min="100" max="100000" value=100></td>';
-                    <td><input type="number" class="form-control is-valid" id="FlashMaxDelay" step="1" min="100" max="100000" value=10000></td>';
-                    <td><input type="number" class="form-control is-valid" id="FlashMinDur"   step="1" min="10"  max="1000"   value=100></td>';
-                    <td><input type="number" class="form-control is-valid" id="FlashMaxDur"   step="1" min="10"  max="1000"   value=1000></td>';
+                    <td><input type="number" class="form-control is-valid" id="FlashMinInt"   step="1" min="20"  max="100"    value=50></td>
+                    <td><input type="number" class="form-control is-valid" id="FlashMaxInt"   step="1" min="20"  max="100"    value=100></td>
+                    <td><input type="number" class="form-control is-valid" id="FlashMinDelay" step="1" min="100" max="100000" value=100></td>
+                    <td><input type="number" class="form-control is-valid" id="FlashMaxDelay" step="1" min="100" max="100000" value=10000></td>
+                    <td><input type="number" class="form-control is-valid" id="FlashMinDur"   step="1" min="10"  max="1000"   value=100></td>
+                    <td><input type="number" class="form-control is-valid" id="FlashMaxDur"   step="1" min="10"  max="1000"   value=1000></td>
                 </tbody>
             </table>
         </div>
@@ -99,7 +106,7 @@
                             <tr></tr>
                         </tbody>
                     </table>
-                    <button type="Button" class="btn btn-primary" id="AddTransitionBtn">Add Transition</button>;
+                    <button type="Button" class="btn btn-primary" id="AddTransitionBtn">Add Transition</button>
                 </div>
             </div>
         </div>
@@ -122,7 +129,7 @@
                         <tr></tr>
                     </tbody>
                 </table>
-                <button type="Button" class="btn btn-primary" id="AddMarqueeGroupBtn">Add Marquee Group</button>;
+                <button type="Button" class="btn btn-primary" id="AddMarqueeGroupBtn">Add Marquee Group</button>
             </div>
         </div>
     </div>

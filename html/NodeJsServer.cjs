@@ -48,6 +48,11 @@ function proxyToEsps(req, res) {
 // Mount middleware at /file to forward any nested paths without using path-to-regexp named wildcards
 app.use('/file', (req, res) => { proxyToEsps(req, res); });
 
+app.get("/V1", (req, res) => { res.redirect(espsIp + "V1"); });
+app.get("/XP", (req, res) => { res.redirect(espsIp + "XP"); });
+app.post("/X6", (req, res) => { res.redirect(espsIp + "X6"); });
+app.post("/X7", (req, res) => { res.redirect(espsIp + "X7"); });
+app.post("/XJ", (req, res) => { res.redirect(espsIp + "XJ"); });
 app.post("/XP",          (req, res) => {res.redirect(espsIp + "XP")});
 app.get("/XJ",           (req, res) => {res.redirect(espsIp + "XJ")});
 app.put("/conf/:file",   (req, res) => {res.redirect(espsIp + "conf/" + req.params.file);});

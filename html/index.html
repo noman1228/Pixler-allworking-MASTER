@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -871,7 +871,7 @@
 
                     <!-- Advanced Mode -->
                     <div class="hidden AdvancedMode">
-                        <div class="form-group hidden AdvancedMode">
+                        <div class="form-group">
                             <label class="control-label col-sm-2 esp32" for="sdspeed">SD Speed (MHz)</label>
                             <div class="col-sm-2 esp32">
                                 <input type="number" class="form-control is-valid esp32" id="sdspeed" step="1"
@@ -880,16 +880,16 @@
                             </div>
                         </div>
 
-                        <div class="form-group hidden AdvancedMode">
+                        <div class="form-group">
                             <label class="control-label col-sm-2" for="miso_pin">SD MISO Pin</label>
                             <div class="col-sm-4">
                                 <input type="number" class="form-control is-valid" id="miso_pin" step="1" min="0"
-                                    max="40" value="0" required title="GPIO on which MISO will be received">
+                                    max="50" value="0" required title="GPIO on which MISO will be received">
                             </div>
                             <label class="control-label col-sm-2" for="mosi_pin">SD MOSI Pin</label>
                             <div class="col-sm-4">
                                 <input type="number" class="form-control is-valid" id="mosi_pin" step="1" min="0"
-                                    max="40" value="0" required title="GPIO on which MOSI will be sent">
+                                    max="50" value="0" required title="GPIO on which MOSI will be sent">
                             </div>
                         </div>
 
@@ -897,12 +897,32 @@
                             <label class="control-label col-sm-2" for="clock_pin">SD Clock Pin</label>
                             <div class="col-sm-4">
                                 <input type="number" class="form-control is-valid" id="clock_pin" step="1" min="0"
-                                    max="40" value="0" required title="GPIO on which CLOCK will be sent">
+                                    max="50" value="0" required title="GPIO on which CLOCK will be sent">
                             </div>
                             <label class="control-label col-sm-2" for="cs_pin">SD Chip Select Pin</label>
                             <div class="col-sm-4">
-                                <input type="number" class="form-control is-valid" id="cs_pin" step="1" min="0" max="40"
+                                <input type="number" class="form-control is-valid" id="cs_pin" step="1" min="0" max="50"
                                     value="0" required title="GPIO on which Chip Select will be sent">
+                            </div>
+                        </div>
+
+                        <div class="form-group hidden" id="SdPowerControlGrp">
+                            <label class="control-label col-sm-2" for="sd_pwr_pin">SD Power Pin</label>
+                            <div class="col-sm-4">
+                                <input type="number" class="form-control is-valid" id="sd_pwr_pin" step="1" min="0"
+                                    max="50" value="0" required title="GPIO on which SD POWER will be sent">
+                            </div>
+                            <label class="control-label col-sm-2" for="sd_pwr_dly">SD Cycle Duration (ms)</label>
+                            <div class="col-sm-4">
+                                <input type="number" class="form-control is-valid" id="sd_pwr_dly" step="100" min="100"
+                                    max="65000" value="100" required title="Num MS to hold SD card off after boot">
+                            </div>
+                            <label class="control-label col-sm-2" for="sd_pwr_on">SD Power ON</label>
+                            <div>
+                                <select name="sd_pwr_on_choices" style="width:15%;max-width:20%;" class="form-control is-valid" id="sd_pwr_on">
+                                    <option value="0">ON = LOW</option>
+                                    <option value="1">ON = HIGH</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -924,7 +944,7 @@
                             </div>
 
                             <label class="control-label AdvancedMode" for="ecb_gpioid">GPIO</label>
-                            <input type="number" class="is-valid AdvancedMode" id="ecb_gpioid" step="1" min="0" max="40" value="0" title="GPIO to monitor for effects trigger">
+                            <input type="number" class="is-valid AdvancedMode" id="ecb_gpioid" step="1" min="0" max="50" value="0" title="GPIO to monitor for effects trigger">
 
                             <label class="control-label AdvancedMode" for="ecb_polarity">Polarity</label>
                             <select class="AdvancedMode" id="ecb_polarity">
@@ -1060,8 +1080,22 @@
                         <label class="control-label col-sm-3 col-xs-4">Flash ID</label>
                         <p class="col-sm-9 col-xs-8 form-control-static" id="flashchipid"></p>
                         <label class="control-label col-sm-3 col-xs-4">Project Links</label>
-                                             </p>
+                        <p class="col-sm-9 col-xs-8 form-control-static">
+                            <a href="https://github.com/forkineye/ESPixelStick" target="_blank">ESPixelStick</a> |
+                            <a href="https://github.com/forkineye/ESPixelStick/issues" target="_blank">Report an
+                                Issue</a>
+                        </p>
+                        <label class="control-label col-sm-3 col-xs-4">Firmware Links</label>
+                        <p class="col-sm-9 col-xs-8 form-control-static">
+                            <a href="https://github.com/forkineye/ESPixelStick/releases/latest" target="_blank">Latest
+                                Release</a> |
+                            <a href="https://github.com/forkineye/ESPixelStick/releases" target="_blank">Beta
+                                Releases</a> |
+                            <a href="https://github.com/forkineye/ESPixelStick/actions/workflows/build.yaml"
+                                target="_blank">CI Builds (untested)</a>
+                        </p>
                     </div>
+
                     <div class="form-group">
                         <div class="col-sm-offset-3 col-sm-3 col-xs-12">
                             <label class="btn btn-primary btn-file">
@@ -1106,7 +1140,7 @@
         <div class="modal-dialog" role="document">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h4 class="modal-title">Saving Configuration, Please Wait</h4>
+                    <h4 class="modal-title">Saving Changes, Please Wait</h4>
                     <div class="bar"></div>
                 </div>
             </div>
