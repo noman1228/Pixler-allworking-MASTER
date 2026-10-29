@@ -13,6 +13,46 @@
     font-synthesis: none;
 }
 
+.testmode-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    margin: 12px 0;
+    border: 1px solid #efb84b;
+    border-radius: var(--radius);
+    color: #ffe3a5;
+    background: #352b16;
+}
+
+.testmode-banner strong {
+    margin-right: 8px;
+}
+
+.testmode-status {
+    padding: 12px 0;
+    color: var(--accent);
+}
+
+.testmode-error {
+    padding: 12px;
+    margin-bottom: 16px;
+    border: 1px solid var(--danger);
+    border-radius: var(--radius);
+    color: #ffc4c4;
+    background: #341e24;
+}
+
+.testmode-actions .btn {
+    margin: 0 8px 8px 0;
+}
+
+#testmode .help-block {
+    color: var(--muted);
+}
+
 body {
   padding-top: 60px;
   padding-bottom: 20px;

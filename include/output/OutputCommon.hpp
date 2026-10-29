@@ -67,6 +67,9 @@ public:
     virtual uint32_t     GetFrameTimeMs() {return 1 + (ActualFrameDurationMicroSec / 1000); }
     bool                 IsPaused() {return Paused;}
     virtual void         ClearStatistics (void);
+    virtual uint32_t     GetTestPixelCount() { return 0; }
+    virtual void         WriteTestPixel(uint32_t, uint8_t, uint8_t, uint8_t) {}
+    virtual void         SetTestModePaused(bool, bool = true) {}
 
 protected:
 

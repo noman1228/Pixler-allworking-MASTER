@@ -227,11 +227,6 @@ void setup()
     // Configure and start the web server
     WebMgr.Begin(&config);
 
-#ifdef SUPPORT_SENSOR_DS18B20
-    // TestHeap(uint32_t(60));
-    // DEBUG_V(String("SensorDS18B20 Heap: ") + String(ESP.getFreeHeap()));
-    SensorDS18B20.Begin();
-#endif // def SUPPORT_SENSOR_DS18B20
 
     // DEBUG_V(String("FPPDiscovery Heap: ") + String(ESP.getFreeHeap()));
     FPPDiscovery.begin ();
@@ -242,7 +237,7 @@ void setup()
     // * ((volatile uint32_t*)0x60000900) &= ~(1); // Hardware WDT OFF
     ESP.wdtEnable (2000); // 2 seconds
 #else
-    esp_task_wdt_init (15, true);
+    esp_task_wdt_init (20, true);
 #endif
 
     WebMgr.CreateAdminInfoFile();
@@ -557,23 +552,20 @@ void loop()
     // Keep the Network Open
     NetworkMgr.Poll ();
     // DEBUG_V();
-
+    FeedWDT ();
     // Poll output
     OutputMgr.Poll ();
     // DEBUG_V();
-
+    FeedWDT ();
     // DEBUG_V();
-
+    FeedWDT ();
     FileMgr.Poll ();
     // DEBUG_V();
-
+    FeedWDT ();
     FPPDiscovery.Poll ();
     // DEBUG_V();
+    FeedWDT ();
 
-#ifdef SUPPORT_SENSOR_DS18B20
-    SensorDS18B20.Poll();
-    // DEBUG_V();
-#endif // def SUPPORT_SENSOR_DS18B20
 
     // need to keep the rx pipeline empty
     size_t BytesToDiscard = min (100, LOG_PORT.available ());
@@ -612,6 +604,7 @@ void loop()
     {
         FeedWDT ();
         SaveConfig ();
+        FeedWDT ();
     }
     // DEBUG_END;
 } // loop

@@ -74,6 +74,7 @@ public:
     uint32_t    GetNumOutputBufferChannelsServiced () { return Num_Channels; }
     bool        ValidateGpio (gpio_num_t ConsoleTxGpio, gpio_num_t ConsoleRxGpio);
     void        RelayUpdate  (uint8_t RelayId, String & NewValue, String & Response);
+    void        SetTestModePaused(bool paused, bool restore = true) override;
 
 private:
 #   define OM_RELAY_CHANNEL_LIMIT           8
@@ -91,6 +92,8 @@ private:
 
     // non config data
     uint16_t    Num_Channels = OM_RELAY_CHANNEL_LIMIT;
+    uint8_t     TestModeSavedValues[OM_RELAY_CHANNEL_LIMIT] = {};
+    bool        TestModePaused = false;
 
 }; // c_OutputRelay
 

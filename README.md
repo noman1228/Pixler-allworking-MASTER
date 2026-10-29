@@ -67,6 +67,14 @@ The current device configuration can be saved to a local drive using the Backup 
 The current configuration can be over written from a file located on the local drive (in any directory you chose) by pressing the Restore button on the admin page. A popup will help you select the file to upload.
 NOTE: A restore is an OVER WRITE, not a merge. Any changes made since the backup file was created will be lost.
 
+## Test Mode
+
+Open the **Test Mode** tab, choose a test and output, then press **Start Test**. Normal inputs and playback pause while the test controls the outputs. **Stop Test / Resume** clears the test and restores normal operation. A banner keeps the stop control available when visiting another tab. Tests continue until stopped or the controller restarts; refreshing or closing the browser does not stop them.
+
+Available tests are solid red, green, blue or white, an RGB color cycle, a chasing white segment, and a blinking white pixel. Colors and chase can run on all configured pixel outputs or one output. For the blinking pixel, choose an output and an LED number starting at 1. LED numbers follow the physical order of the configured pixels, bypassing grouping and zigzag mapping, so the test lights only the selected LED. Configured null pixels stay dark. Other output buffers remain black during testing.
+
+Brightness, step time and chase segment length are adjustable. Applying a new selection changes the running test without saving or replacing the device configuration. Install both the updated firmware and web filesystem (or the combined EFU update) to use the tab.
+
 ## SD File Management
 
 The file management page is available on the UI when an SD card is detected by the ESP. You can add / remove files using the file management screen. It is known that the HTTP based file transfer used by the File Management screen can be very slow for large files. Alternativly, you can use your favorite FTP client (tested with FileZilla) to transfer files to the ESP. NOTE: You must configure the FTP client to run in single connection (port) mode. The ESP does not have enough resources to support concurrent command and data connections.

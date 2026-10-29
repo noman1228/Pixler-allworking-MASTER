@@ -568,6 +568,8 @@ $(function ()
             RequestFileUpload();
         }));
     */
+    TestModeUI.initialize();
+
     // Autoload tab based on URL hash
     let hash = window.location.hash;
     hash && $('ul.navbar-nav li a[href="' + hash + '"]').click();
@@ -821,7 +823,11 @@ function SendConfigFileToServer(FileName, DataString)
 
 function ProcessWindowChange(NextWindow) {
 
-    if (NextWindow === "#diag") {
+    if (NextWindow === "#testmode") {
+        TestModeUI.refresh();
+    }
+
+    else if (NextWindow === "#diag") {
     }
 
     else if (NextWindow === "#admin")
@@ -2893,3 +2899,195 @@ $('#confirm-reset .btn-ok').on("click", (function () {
     showReboot();
     SendCommand('X7');
 }));
+
+// Test requests are serialized so an older status reply cannot undo a Start or Stop.
+const TestModeUI = (function () {
+    let status = null;
+    let connected = false;
+    let busy = false;
+    let commandBusy = false;
+    let stopQueued = false;
+    let dirty = false;
+    let draftRevision = 0;
+    let outputsKey = '';
+    let lastPoll = 0;
+    const labels = {
+        red: 'Solid Red', green: 'Solid Green', blue: 'Solid Blue', white: 'Solid White',
+        rgb: 'Red / Green / Blue Cycle', chase: 'Chasing White Segment', pixel: 'Blink One White LED'
+    };
+
+    function configuredOutputs() {
+        return status ? status.outputs.filter(output => output.pixels > 0) : [];
+    }
+
+    function selectedOutput() {
+        const id = Number($('#testmode-output').val());
+        return configuredOutputs().find(output => output.id === id);
+    }
+
+    function showError(message) {
+        $('#testmode-error').text(message).toggleClass('hidden', !message);
+    }
+
+    function updateFields() {
+        const pattern = $('#testmode-pattern').val();
+        const pixel = pattern === 'pixel';
+        const animated = pixel || pattern === 'chase' || pattern === 'rgb';
+        const output = selectedOutput();
+        $('#testmode-pattern, #testmode-output, #testmode-brightness').prop('disabled', commandBusy);
+        $('#testmode-pixel-group').toggleClass('hidden', !pixel);
+        $('#testmode-pixel').prop('disabled', !pixel || commandBusy).attr('max', output ? output.pixels : 1);
+        $('#testmode-pixel-help').text(output ? 'Choose LED 1 through ' + output.pixels + ' on this output.' : 'Choose one output to locate an LED.');
+        $('#testmode-interval-group').toggleClass('hidden', !animated);
+        $('#testmode-interval').prop('disabled', !animated || commandBusy);
+        $('#testmode-segment-group').toggleClass('hidden', pattern !== 'chase');
+        $('#testmode-segment').prop('disabled', pattern !== 'chase' || commandBusy);
+        $('#testmode-start').prop('disabled', busy || !connected || !configuredOutputs().length)
+            .text(status && status.active ? 'Apply Test' : 'Start Test');
+        $('.testmode-stop').prop('disabled', commandBusy && stopQueued);
+        const total = configuredOutputs().reduce((sum, item) => sum + item.pixels, 0);
+        $('#testmode-output-help').text(!status ? 'Loading configured outputs…' :
+            !configuredOutputs().length ? 'No pixel outputs are configured. Configure an output in Device Setup first.' :
+            output ? output.pixels + ' configured LEDs on this output.' :
+            total + ' configured LEDs across ' + configuredOutputs().length + ' pixel outputs.');
+    }
+
+    function displayStatus(data, syncFields) {
+        if (!data || typeof data.active !== 'boolean' || !Array.isArray(data.outputs)) {
+            throw new Error('The controller returned an invalid Test Mode status.');
+        }
+        status = data;
+        connected = true;
+        showError('');
+        const key = JSON.stringify(data.outputs);
+        if (key !== outputsKey) {
+            const previous = $('#testmode-output').val();
+            const select = $('#testmode-output').empty();
+            select.append($('<option>').val(-1).text('All Pixel Outputs'));
+            configuredOutputs().forEach(output => {
+                select.append($('<option>').val(output.id).text('Output ' + (output.id + 1) + ' — ' + output.name + ' (' + output.pixels + ' LEDs)'));
+            });
+            select.val(previous);
+            if (select.val() === null) select.val(-1);
+            outputsKey = key;
+        }
+        if (syncFields || !dirty) {
+            $('#testmode-pattern').val(data.pattern);
+            $('#testmode-output').val(data.output);
+            $('#testmode-pixel').val(data.pixel);
+            $('#testmode-brightness').val(data.brightness);
+            $('#testmode-interval').val(data.interval);
+            $('#testmode-segment').val(data.segment);
+        }
+        const output = data.outputs.find(item => item.id === data.output);
+        const target = data.output === -1 ? 'all pixel outputs' : 'output ' + (data.output + 1);
+        const detail = (labels[data.pattern] || data.pattern) + ' · ' + target +
+            (data.pattern === 'pixel' ? ' · LED ' + data.pixel : '');
+        $('#testmode-banner').toggleClass('hidden', !data.active);
+        $('#testmode-banner-detail').text(detail + '. Normal traffic is paused.');
+        $('#testmode-status').text(data.active ? 'Running: ' + detail + '.' : 'Stopped. Normal operation is enabled.');
+        // Do not silently change an invalid draft when another browser changes the outputs.
+        if (data.active && data.output !== -1 && !output) {
+            showError('The running test output is no longer configured. Stop the test and choose an available output.');
+        }
+        updateFields();
+    }
+
+    function request(method, data) {
+        if (busy) return;
+        busy = true;
+        commandBusy = method === 'POST';
+        const submittedRevision = draftRevision;
+        lastPoll = Date.now();
+        if (commandBusy) {
+            showError('');
+            $('#testmode-status').text(data.active ? 'Starting test…' : 'Stopping test…');
+        }
+        updateFields();
+        $.ajax({
+            url: 'api/testmode', type: method, data: data, dataType: 'json', cache: false, timeout: 8000
+        }).done(function (response) {
+            try {
+                const applied = method === 'POST' && data.active && submittedRevision === draftRevision;
+                displayStatus(response, applied);
+                if (applied) dirty = false;
+            } catch (error) {
+                connected = false;
+                showError(error.message);
+                $('#testmode-status').text('Test status is unknown.');
+            }
+        }).fail(function (xhr, reason) {
+            connected = false;
+            const message = xhr.responseJSON && xhr.responseJSON.error;
+            showError(message || (xhr.status === 404 ? 'Test Mode is unavailable. Update the controller firmware and web files together.' :
+                'Could not reach Test Mode (' + (reason === 'timeout' ? 'request timed out' : 'request failed') + '). Use Stop Test & Resume to retry stopping.'));
+            $('#testmode-status').text('Test status is unknown. The controller may still be running the last test.');
+            if (status && status.active) {
+                $('#testmode-banner-detail').text('Connection lost. The last confirmed test was active.');
+            }
+        }).always(function () {
+            busy = false;
+            commandBusy = false;
+            updateFields();
+            if (stopQueued) {
+                stopQueued = false;
+                request('POST', {active: false});
+            }
+        });
+    }
+
+    function refresh() {
+        request('GET');
+    }
+
+    function stop() {
+        if (busy) {
+            stopQueued = true;
+            $('#testmode-status').text('Stop requested. Waiting for the current request to finish…');
+            return;
+        }
+        request('POST', {active: false});
+    }
+
+    function initialize() {
+        $('#testmode-form').on('input change', 'input, select', function () {
+            dirty = true;
+            draftRevision++;
+            if (this.id === 'testmode-pattern' && this.value === 'pixel' && !selectedOutput()) {
+                const first = configuredOutputs()[0];
+                if (first) $('#testmode-output').val(first.id);
+            }
+            updateFields();
+        });
+        $('#testmode-form').on('submit', function (event) {
+            event.preventDefault();
+            if (busy || !connected) return;
+            if (!this.reportValidity()) return;
+            const pattern = $('#testmode-pattern').val();
+            const output = Number($('#testmode-output').val());
+            if (pattern === 'pixel' && !selectedOutput()) {
+                showError('Choose one output for the blinking LED test.');
+                $('#testmode-output').focus();
+                return;
+            }
+            request('POST', {
+                active: true, pattern: pattern, output: output,
+                pixel: pattern === 'pixel' ? Number($('#testmode-pixel').val()) : 1,
+                brightness: Number($('#testmode-brightness').val()),
+                interval: ['pixel', 'chase', 'rgb'].includes(pattern) ? Number($('#testmode-interval').val()) : 250,
+                segment: pattern === 'chase' ? Number($('#testmode-segment').val()) : 5
+            });
+        });
+        $('.testmode-stop').on('click', stop);
+        refresh();
+        setInterval(function () {
+            const period = status && status.active || $('#testmode').is(':visible') ? 1000 : 5000;
+            if (!document.hidden && Date.now() - lastPoll >= period) refresh();
+        }, 1000);
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) refresh();
+        });
+    }
+
+    return {initialize: initialize, refresh: refresh};
+})();

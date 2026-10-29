@@ -47,6 +47,7 @@ function proxyToEsps(req, res) {
 // Use a named wildcard parameter to avoid path-to-regexp errors
 // Mount middleware at /file to forward any nested paths without using path-to-regexp named wildcards
 app.use('/file', (req, res) => { proxyToEsps(req, res); });
+app.use('/api/testmode', (req, res) => { proxyToEsps(req, res); });
 
 app.get("/V1", (req, res) => { res.redirect(espsIp + "V1"); });
 app.get("/XP", (req, res) => { res.redirect(espsIp + "XP"); });

@@ -160,6 +160,82 @@ void c_WebMgr::init ()
             ProcessXJRequest (request);
         });
 
+        // Runtime tests never replace the saved input/output configuration.
+        webServer.on ("/api/testmode", HTTP_GET | HTTP_POST | HTTP_OPTIONS, [](AsyncWebServerRequest* request)
+        {
+            if (request->method() == HTTP_OPTIONS)
+            {
+                request->send(200);
+                return;
+            }
+
+            JsonDocument responseDoc;
+            JsonObject response = responseDoc.to<JsonObject>();
+            String error;
+            int responseCode = 200;
+            if (request->method() == HTTP_POST)
+            {
+                JsonDocument commandDoc;
+                JsonObject command = commandDoc.to<JsonObject>();
+                if (!request->hasParam("active", true))
+                {
+                    error = F("The active field is required.");
+                }
+                else
+                {
+                    String active = request->getParam("active", true)->value();
+                    if (active == "true" || active == "1") { command["active"] = true; }
+                    else if (active == "false" || active == "0") { command["active"] = false; }
+                    else { error = F("The active field must be true or false."); }
+                }
+
+                // A stop only needs active=false, even if other form fields are invalid.
+                if (error.isEmpty() && command["active"].as<bool>())
+                {
+                    if (request->hasParam("pattern", true))
+                    {
+                        command["pattern"] = request->getParam("pattern", true)->value();
+                    }
+                    const char* fields[] = {"output", "pixel", "brightness", "interval", "segment"};
+                    for (const char* field : fields)
+                    {
+                        if (!request->hasParam(field, true)) { continue; }
+                        String value = request->getParam(field, true)->value();
+                        bool valid = !value.isEmpty() && value.length() <= 11;
+                        for (size_t i = 0; valid && i < value.length(); ++i)
+                        {
+                            valid = (value[i] >= '0' && value[i] <= '9') ||
+                                    (i == 0 && value[i] == '-' && value.length() > 1);
+                        }
+                        int64_t number = valid ? strtoll(value.c_str(), nullptr, 10) : 0;
+                        if (!valid || number < INT32_MIN || number > INT32_MAX)
+                        {
+                            error = String(field) + F(" must be a whole number.");
+                            break;
+                        }
+                        command[field] = int32_t(number);
+                    }
+                }
+
+                if (error.isEmpty() && !OutputMgr.SetTestMode(command, error))
+                {
+                    responseCode = 409;
+                }
+                else if (!error.isEmpty())
+                {
+                    responseCode = 400;
+                }
+            }
+
+            if (error.isEmpty()) { OutputMgr.GetTestModeStatus(response); }
+            else { response["error"] = error; }
+            String body;
+            serializeJson(responseDoc, body);
+            AsyncWebServerResponse* reply = request->beginResponse(responseCode, CN_applicationSLASHjson, body);
+            reply->addHeader("Cache-Control", "no-store");
+            request->send(reply);
+        });
+
     	webServer.on ("/settime", HTTP_POST | HTTP_GET | HTTP_OPTIONS, [this](AsyncWebServerRequest* request)
         {
             // DEBUG_V("/settime");

@@ -54,6 +54,41 @@
 
 #include "input/InputMgr.hpp"
 
+#ifdef ARDUINO_ARCH_ESP32
+namespace
+{
+    class OutputDataGuard
+    {
+        SemaphoreHandle_t mutex;
+    public:
+        explicit OutputDataGuard(SemaphoreHandle_t value) : mutex(value)
+        { if (mutex) { xSemaphoreTakeRecursive(mutex, portMAX_DELAY); } }
+        ~OutputDataGuard() { if (mutex) { xSemaphoreGiveRecursive(mutex); } }
+    };
+}
+#define OUTPUT_DATA_GUARD OutputDataGuard dataGuard(OutputDataMutex)
+#else
+#define OUTPUT_DATA_GUARD
+#endif
+
+namespace
+{
+    const char* TestPatternName(TestModePatterns::Pattern pattern)
+    {
+        switch (pattern)
+        {
+            case TestModePatterns::Pattern::Red: return "red";
+            case TestModePatterns::Pattern::Green: return "green";
+            case TestModePatterns::Pattern::Blue: return "blue";
+            case TestModePatterns::Pattern::White: return "white";
+            case TestModePatterns::Pattern::Rgb: return "rgb";
+            case TestModePatterns::Pattern::Chase: return "chase";
+            case TestModePatterns::Pattern::Pixel: return "pixel";
+        }
+        return "red";
+    }
+}
+
 #ifndef DEFAULT_RELAY_GPIO
     #define DEFAULT_RELAY_GPIO      gpio_num_t::GPIO_NUM_1
 #endif // ndef DEFAULT_RELAY_GPIO
@@ -241,6 +276,9 @@ c_OutputMgr::~c_OutputMgr()
 ///< Start the module
 void c_OutputMgr::Begin ()
 {
+#ifdef ARDUINO_ARCH_ESP32
+    if (!OutputDataMutex) { OutputDataMutex = xSemaphoreCreateRecursiveMutex(); }
+#endif
     // DEBUG_START;
     // DEBUG_V(String("Current CPU ID: ") + String(xPortGetCoreID()));
 
@@ -480,6 +518,8 @@ void c_OutputMgr::GetConfig (byte * Response, uint32_t maxlen )
 //-----------------------------------------------------------------------------
 void c_OutputMgr::GetStatus (JsonObject & jsonStatus)
 {
+    OUTPUT_DATA_GUARD;
+    if (ConfigInProgress) { return; }
     // DEBUG_START;
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -1058,10 +1098,15 @@ void c_OutputMgr::InstantiateNewOutputChannel(DriverInfo_t & CurrentOutput, e_Ou
 */
 void c_OutputMgr::LoadConfig ()
 {
+    {
+        OUTPUT_DATA_GUARD;
+        // Keep physical addressing stable for a test and drain earlier writes.
+        if (TestMode.active || ConfigInProgress) { return; }
+        ConfigInProgress = true;
+    }
     // DEBUG_START;
 
     ConfigLoadNeeded = NO_CONFIG_NEEDED;
-    ConfigInProgress = true;
 
     // try to load and process the config file
     if (!FileMgr.LoadFlashFile(ConfigFileName, [this](JsonDocument &JsonConfigDoc)
@@ -1088,7 +1133,14 @@ void c_OutputMgr::LoadConfig ()
         }
     }
 
-    ConfigInProgress = false;
+    {
+        OUTPUT_DATA_GUARD;
+        for (auto& output : OutputChannelDrivers)
+        {
+            if (output.OutputDriverInUse) { ((c_OutputCommon*)output.OutputDriver)->PauseOutput(OutputIsPaused || !output.OutputBufferDataSize); }
+        }
+        ConfigInProgress = false;
+    }
 
     // DEBUG_END;
 
@@ -1382,6 +1434,9 @@ void c_OutputMgr::SetSerialUart()
 //-----------------------------------------------------------------------------
 void c_OutputMgr::Poll()
 {
+    // Never acquire the input manager lock while holding the output data lock:
+    // an input frame may be waiting to finish a write on another core.
+    ServiceTestMode();
     // //DEBUG_START;
 
 #ifdef LED_FLASH_GPIO
@@ -1399,11 +1454,18 @@ void c_OutputMgr::Poll()
         }
     } // done need to save the current config
 
+    OUTPUT_DATA_GUARD;
     if ((false == OutputIsPaused) && (false == ConfigInProgress) && (false == RebootInProgress()) )
     {
+        RenderTestMode();
         // //DEBUG_V();
         for (DriverInfo_t & CurrentOutput : OutputChannelDrivers)
         {
+            if (!CurrentOutput.OutputBufferDataSize) { continue; }
+#ifdef SUPPORT_OutputType_Servo_PCA9685
+            // Hold servo positions instead of moving them to a zero-data position.
+            if (TestMode.active && ((c_OutputCommon*)CurrentOutput.OutputDriver)->GetOutputType() == OutputType_Servo_PCA9685) { continue; }
+#endif
             // //DEBUG_V("Poll a channel");
             ((c_OutputCommon*)CurrentOutput.OutputDriver)->Poll ();
         }
@@ -1428,10 +1490,30 @@ void c_OutputMgr::UpdateDisplayBufferReferences (void)
     */
     uint32_t OutputBufferOffset     = 0;    // offset into the raw data in the output buffer
     uint32_t OutputChannelOffset    = 0;    // Virtual channel offset to the output buffer.
+    uint32_t RequestedBytes[OutputChannelId_End];
+    uint32_t RequestedChannels[OutputChannelId_End];
+
+    // Stop background transmitters before replacing any buffer references.
+    // Serial and servo drivers report their requested size using the current
+    // buffer size, so capture all requests before clearing stale allocations.
+    uint32_t index = 0;
+    for (auto& output : OutputChannelDrivers)
+    {
+        c_OutputCommon* driver = (c_OutputCommon*)output.OutputDriver;
+        driver->PauseOutput(true);
+        RequestedBytes[index] = driver->GetNumOutputBufferBytesNeeded();
+        RequestedChannels[index] = driver->GetNumOutputBufferChannelsServiced();
+        output.OutputBufferStartingOffset = output.OutputBufferDataSize = output.OutputBufferEndOffset = 0;
+        output.OutputChannelStartingOffset = output.OutputChannelSize = output.OutputChannelEndOffset = 0;
+        driver->SetOutputBufferSize(0);
+        driver->SetOutputBufferAddress(OutputBuffer);
+        ++index;
+    }
 
     // DEBUG_V (String ("        BufferSize: ") + String (sizeof(OutputBuffer)));
     // DEBUG_V (String ("OutputBufferOffset: ") + String (OutputBufferOffset));
 
+    index = 0;
     for (DriverInfo_t & CurrentOutput : OutputChannelDrivers)
     {
         // String DriverName;
@@ -1439,12 +1521,8 @@ void c_OutputMgr::UpdateDisplayBufferReferences (void)
         // DEBUG_V(String("Name: ") + DriverName);
         // DEBUG_V(String("PortId: ") + String(OutputChannel.pOutputChannelDriver->GetOutputChannelId()) );
 
-        CurrentOutput.OutputBufferStartingOffset = OutputBufferOffset;
-        CurrentOutput.OutputChannelStartingOffset = OutputChannelOffset;
-        ((c_OutputCommon*)CurrentOutput.OutputDriver)->SetOutputBufferAddress(&OutputBuffer[OutputBufferOffset]);
-
-        uint32_t OutputBufferDataBytesNeeded        = ((c_OutputCommon*)CurrentOutput.OutputDriver)->GetNumOutputBufferBytesNeeded ();
-        uint32_t VirtualOutputBufferDataBytesNeeded = ((c_OutputCommon*)CurrentOutput.OutputDriver)->GetNumOutputBufferChannelsServiced ();
+        uint32_t OutputBufferDataBytesNeeded = RequestedBytes[index];
+        uint32_t VirtualOutputBufferDataBytesNeeded = RequestedChannels[index++];
 
         uint32_t AvailableChannels = sizeof(OutputBuffer) - OutputBufferOffset;
 
@@ -1460,9 +1538,12 @@ void c_OutputMgr::UpdateDisplayBufferReferences (void)
         // DEBUG_V (String ("    ChannelsNeeded: ") + String (OutputBufferDataBytesNeeded));
         // DEBUG_V (String (" AvailableChannels: ") + String (AvailableChannels));
 
+        CurrentOutput.OutputBufferStartingOffset = OutputBufferOffset;
+        CurrentOutput.OutputChannelStartingOffset = OutputChannelOffset;
+        ((c_OutputCommon*)CurrentOutput.OutputDriver)->SetOutputBufferAddress(&OutputBuffer[OutputBufferOffset]);
         OutputBufferOffset += OutputBufferDataBytesNeeded;
         CurrentOutput.OutputBufferDataSize  = OutputBufferDataBytesNeeded;
-        CurrentOutput.OutputBufferEndOffset = OutputBufferOffset - 1;
+        CurrentOutput.OutputBufferEndOffset = OutputBufferDataBytesNeeded ? OutputBufferOffset - 1 : OutputBufferOffset;
         ((c_OutputCommon*)CurrentOutput.OutputDriver)->SetOutputBufferSize (OutputBufferDataBytesNeeded);
 
         OutputChannelOffset += VirtualOutputBufferDataBytesNeeded;
@@ -1486,6 +1567,8 @@ void c_OutputMgr::UpdateDisplayBufferReferences (void)
 //-----------------------------------------------------------------------------
 void c_OutputMgr::RelayUpdate (uint8_t RelayId, String & NewValue, String & Response)
 {
+    OUTPUT_DATA_GUARD;
+    if (TestMode.active || ConfigInProgress) { Response = F("Outputs are busy with Test Mode or configuration"); return; }
     // DEBUG_START;
 
     do // once
@@ -1513,14 +1596,18 @@ void c_OutputMgr::RelayUpdate (uint8_t RelayId, String & NewValue, String & Resp
 //-----------------------------------------------------------------------------
 void c_OutputMgr::PauseOutputs(bool PauseTheOutput)
 {
+    OUTPUT_DATA_GUARD;
+    if (PauseTheOutput) { StopTestMode(false); }
     // DEBUG_START;
     // DEBUG_V(String("PauseTheOutput: ") + String(PauseTheOutput));
 
     OutputIsPaused = PauseTheOutput;
 
+    if (ConfigInProgress) { return; }
+
     for (DriverInfo_t & CurrentOutput : OutputChannelDrivers)
     {
-        ((c_OutputCommon*)CurrentOutput.OutputDriver)->PauseOutput(PauseTheOutput);
+        ((c_OutputCommon*)CurrentOutput.OutputDriver)->PauseOutput(PauseTheOutput || !CurrentOutput.OutputBufferDataSize);
     }
 
     // DEBUG_END;
@@ -1529,6 +1616,8 @@ void c_OutputMgr::PauseOutputs(bool PauseTheOutput)
 //-----------------------------------------------------------------------------
 void c_OutputMgr::WriteChannelData(uint32_t StartChannelId, uint32_t ChannelCount, uint8_t *pSourceData)
 {
+    OUTPUT_DATA_GUARD;
+    if (TestMode.active || ConfigInProgress) { return; }
     // DEBUG_START;
 
     do // once
@@ -1593,6 +1682,8 @@ void c_OutputMgr::WriteChannelData(uint32_t StartChannelId, uint32_t ChannelCoun
 //-----------------------------------------------------------------------------
 void c_OutputMgr::ReadChannelData(uint32_t StartChannelId, uint32_t ChannelCount, byte *pTargetData)
 {
+    OUTPUT_DATA_GUARD;
+    if (ConfigInProgress) { return; }
     // DEBUG_START;
 
     do // once
@@ -1653,6 +1744,8 @@ void c_OutputMgr::ReadChannelData(uint32_t StartChannelId, uint32_t ChannelCount
 //-----------------------------------------------------------------------------
 void c_OutputMgr::ClearBuffer()
 {
+    OUTPUT_DATA_GUARD;
+    if (TestMode.active || ConfigInProgress) { return; }
     // DEBUG_START;
 
     memset(GetBufferAddress(), 0x00, OutputMgr.GetBufferSize());
@@ -1660,6 +1753,181 @@ void c_OutputMgr::ClearBuffer()
     // DEBUG_END;
 
 } // ClearBuffer
+
+// Runtime diagnostics never rewrite the saved input or output configuration.
+bool c_OutputMgr::SetTestMode(const JsonObject& request, String& error)
+{
+    OUTPUT_DATA_GUARD;
+    error = emptyString;
+    if (!request["active"].is<bool>())
+    {
+        error = F("active must be true or false");
+        return false;
+    }
+    if (!request["active"].as<bool>())
+    {
+        StopTestMode();
+        return true;
+    }
+    if (!HasBeenInitialized || ConfigInProgress || OutputIsPaused || RebootInProgress())
+    {
+        error = F("Outputs are unavailable while paused, configuring, or rebooting");
+        return false;
+    }
+
+    TestModeSettings candidate = TestMode;
+    candidate.active = true;
+    if (!request["pattern"].isNull())
+    {
+        if (!request["pattern"].is<const char*>())
+        {
+            error = F("Choose a valid test pattern");
+            return false;
+        }
+        const String name = request["pattern"].as<const char*>();
+        bool found = false;
+        for (auto pattern : {TestModePatterns::Pattern::Red, TestModePatterns::Pattern::Green,
+                             TestModePatterns::Pattern::Blue, TestModePatterns::Pattern::White,
+                             TestModePatterns::Pattern::Rgb, TestModePatterns::Pattern::Chase,
+                             TestModePatterns::Pattern::Pixel})
+        {
+            if (name == TestPatternName(pattern)) { candidate.pattern = pattern; found = true; break; }
+        }
+        if (!found) { error = F("Choose a valid test pattern"); return false; }
+    }
+
+    struct NumericField { const char* name; int32_t minimum; int32_t maximum; };
+    const NumericField fields[] = {
+        {"output", -1, int32_t(OutputChannelId_End) - 1}, {"pixel", 1, INT32_MAX},
+        {"brightness", 1, 255}, {"interval", 50, 5000}, {"segment", 1, 1000}
+    };
+    for (const auto& field : fields)
+    {
+        if (request[field.name].isNull()) { continue; }
+        if (!request[field.name].is<int32_t>())
+        {
+            error = String(field.name) + F(" must be a whole number");
+            return false;
+        }
+        const int32_t value = request[field.name].as<int32_t>();
+        if (value < field.minimum || value > field.maximum)
+        {
+            error = String(field.name) + F(" is outside the allowed range");
+            return false;
+        }
+        if (String(field.name) == "output") { candidate.output = value; }
+        else if (String(field.name) == "pixel") { candidate.pixel = uint32_t(value); }
+        else if (String(field.name) == "brightness") { candidate.brightness = uint8_t(value); }
+        else if (String(field.name) == "interval") { candidate.interval = uint32_t(value); }
+        else { candidate.segment = uint32_t(value); }
+    }
+
+    uint32_t pixelCount = 0;
+    for (auto& output : OutputChannelDrivers)
+    {
+        if (!output.OutputDriverInUse) { continue; }
+        const uint32_t count = ((c_OutputCommon*)output.OutputDriver)->GetTestPixelCount();
+        if (candidate.output == -1 || candidate.output == int32_t(output.DriverId)) { pixelCount += count; }
+    }
+    if (!pixelCount) { error = F("Select a configured pixel output"); return false; }
+    if (candidate.pattern == TestModePatterns::Pattern::Pixel &&
+        (candidate.output == -1 || candidate.pixel > pixelCount))
+    {
+        error = F("Choose one output and an LED within its configured pixel count");
+        return false;
+    }
+
+    TestMode = candidate;
+    TestStartedAt = millis();
+    LastTestStep = uint32_t(-1);
+    memset(OutputBuffer, 0, sizeof(OutputBuffer));
+    for (auto& output : OutputChannelDrivers)
+    {
+        if (output.OutputDriverInUse) { ((c_OutputCommon*)output.OutputDriver)->SetTestModePaused(true); }
+    }
+    // The active flag and data lock already exclude all normal input writes.
+    // Poll applies the independent input pause without reversing lock order.
+    RenderTestMode();
+    return true;
+}
+
+void c_OutputMgr::GetTestModeStatus(JsonObject& status)
+{
+    OUTPUT_DATA_GUARD;
+    status["active"] = TestMode.active;
+    status["pattern"] = TestPatternName(TestMode.pattern);
+    status["output"] = TestMode.output;
+    status["pixel"] = TestMode.pixel;
+    status["brightness"] = TestMode.brightness;
+    status["interval"] = TestMode.interval;
+    status["segment"] = TestMode.segment;
+    uint32_t totalPixels = 0;
+    JsonArray outputs = status["outputs"].to<JsonArray>();
+    if (ConfigInProgress) { status["totalPixels"] = 0; return; }
+    for (auto& output : OutputChannelDrivers)
+    {
+        if (!output.OutputDriverInUse) { continue; }
+        c_OutputCommon* driver = (c_OutputCommon*)output.OutputDriver;
+        const uint32_t count = driver->GetTestPixelCount();
+        if (!count) { continue; }
+        JsonObject item = outputs.add<JsonObject>();
+        String name;
+        driver->GetDriverName(name);
+        item["id"] = int(output.DriverId);
+        item["name"] = name;
+        item["pixels"] = count;
+        totalPixels += count;
+    }
+    status["totalPixels"] = totalPixels;
+}
+
+void c_OutputMgr::StopTestMode(bool restoreOutputs)
+{
+    if (!TestMode.active) { return; }
+    memset(OutputBuffer, 0, sizeof(OutputBuffer));
+    for (auto& output : OutputChannelDrivers)
+    {
+        if (output.OutputDriverInUse) { ((c_OutputCommon*)output.OutputDriver)->SetTestModePaused(false, restoreOutputs); }
+    }
+    TestMode.active = false;
+    LastTestStep = uint32_t(-1);
+}
+
+void c_OutputMgr::ServiceTestMode()
+{
+    bool active;
+    {
+        OUTPUT_DATA_GUARD;
+        if (RebootInProgress()) { StopTestMode(false); }
+        active = TestMode.active;
+    }
+    if (active != InputTestPauseApplied)
+    {
+        InputMgr.SetTestModePaused(active);
+        InputTestPauseApplied = active;
+    }
+}
+
+void c_OutputMgr::RenderTestMode()
+{
+    if (!TestMode.active) { return; }
+    const uint32_t step = uint32_t(millis() - TestStartedAt) / TestMode.interval;
+    if (step == LastTestStep) { return; }
+    LastTestStep = step;
+    memset(OutputBuffer, 0, sizeof(OutputBuffer));
+    for (auto& output : OutputChannelDrivers)
+    {
+        if (!output.OutputDriverInUse || (TestMode.output != -1 && TestMode.output != int32_t(output.DriverId))) { continue; }
+        c_OutputCommon* driver = (c_OutputCommon*)output.OutputDriver;
+        const uint32_t count = driver->GetTestPixelCount();
+        for (uint32_t pixel = 0; pixel < count; ++pixel)
+        {
+            const auto color = TestModePatterns::PixelColor(TestMode.pattern, step, pixel, count,
+                TestMode.segment, TestMode.brightness, TestMode.pixel - 1);
+            driver->WriteTestPixel(pixel, color.red, color.green, color.blue);
+        }
+    }
+}
 
 // create a global instance of the output channel factory
 c_OutputMgr OutputMgr;

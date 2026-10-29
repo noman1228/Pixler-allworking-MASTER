@@ -28,6 +28,9 @@
 #include "externalInput.h"
 #include <TimeLib.h>
 #include <Ticker.h>
+#ifdef ARDUINO_ARCH_ESP32
+#include <freertos/semphr.h>
+#endif
 
 class c_InputCommon; ///< forward declaration to the pure virtual Input class that will be defined later.
 
@@ -59,6 +62,7 @@ public:
     void Process              ();
     void SetBufferInfo        (uint32_t BufferSize);
     void SetOperationalState  (bool Active);
+    void SetTestModePaused    (bool Paused);
     void NetworkStateChanged  (bool IsConnected);
     void DeleteConfig         () { FileMgr.DeleteFlashFile (ConfigFileName); }
     bool GetNetworkState      () { return IsConnected; }
@@ -109,6 +113,11 @@ private:
     bool            configInProgress    = false;
     time_t          ConfigLoadNeeded    = NO_CONFIG_NEEDED;
     bool            PauseProcessing     = false;
+    bool            TestModePaused      = false;
+#ifdef ARDUINO_ARCH_ESP32
+    SemaphoreHandle_t InputStateMutex = nullptr;
+#endif
+    void ApplyOperationalState();
 
     // configuration parameter names for the channel manager within the config file
 #   define IM_EffectsControlButtonName F ("ecb")

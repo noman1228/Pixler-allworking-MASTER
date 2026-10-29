@@ -154,6 +154,7 @@
                     <li class="active"><a href="#home">Home</a></li>
                     <li><a href="#pg_network">Network Setup</a></li>
                     <li><a href="#config">Device Setup</a></li>
+                    <li><a href="#testmode">Test Mode</a></li>
                     <li><a href="#diag">Diagnostics</a></li>
                     <li id="li-filemanagement" class="hidden"><a href="#filemanagement">File Management</a></li>
                 </ul>
@@ -165,6 +166,10 @@
     </nav>
 
     <div class="container">
+        <div id="testmode-banner" class="testmode-banner hidden" role="status" aria-live="polite">
+            <div><strong>TEST MODE ACTIVE</strong> <span id="testmode-banner-detail"></span></div>
+            <button type="button" class="btn btn-danger testmode-stop">Stop Test &amp; Resume</button>
+        </div>
         <!-- Home / Status page -->
         <div id="home" class="collapse in mdiv anchor">
             <div class="row">
@@ -975,6 +980,74 @@
                     </div>
                 </div>
             </form>
+        </div>
+
+        <!-- Test Mode -->
+        <div id="testmode" class="mdiv hidden anchor">
+            <fieldset>
+                <legend class="esps-legend">Test Mode</legend>
+                <p>Run a test on all pixel outputs or choose one output. Normal inputs and other output data are paused while a test runs.</p>
+                <p>The test keeps running when you change tabs or close this page. Select <strong>Stop Test &amp; Resume</strong> to return to normal operation.</p>
+                <div id="testmode-status" class="testmode-status" role="status" aria-live="polite">Reading test status…</div>
+                <div id="testmode-error" class="testmode-error hidden" role="alert"></div>
+                <form id="testmode-form" class="form-horizontal">
+                    <div class="form-group">
+                        <label for="testmode-pattern" class="control-label col-sm-2">Test</label>
+                        <div class="col-sm-6">
+                            <select id="testmode-pattern" class="form-control">
+                                <option value="red">Solid Red</option>
+                                <option value="green">Solid Green</option>
+                                <option value="blue">Solid Blue</option>
+                                <option value="white">Solid White</option>
+                                <option value="rgb">Red / Green / Blue Cycle</option>
+                                <option value="chase">Chasing White Segment</option>
+                                <option value="pixel">Blink One White LED</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="testmode-output" class="control-label col-sm-2">Output</label>
+                        <div class="col-sm-6">
+                            <select id="testmode-output" class="form-control"><option value="-1">All Pixel Outputs</option></select>
+                            <p id="testmode-output-help" class="help-block">Loading configured outputs…</p>
+                        </div>
+                    </div>
+                    <div id="testmode-pixel-group" class="form-group hidden">
+                        <label for="testmode-pixel" class="control-label col-sm-2">LED Number</label>
+                        <div class="col-sm-3">
+                            <input id="testmode-pixel" type="number" class="form-control" min="1" max="1" step="1" value="1" required disabled>
+                            <p id="testmode-pixel-help" class="help-block">LED 1 is the first configured pixel on this output.</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="testmode-brightness" class="control-label col-sm-2">Brightness</label>
+                        <div class="col-sm-3">
+                            <input id="testmode-brightness" type="number" class="form-control" min="1" max="255" step="1" value="64" required>
+                            <p class="help-block">1–255</p>
+                        </div>
+                    </div>
+                    <div id="testmode-interval-group" class="form-group hidden">
+                        <label for="testmode-interval" class="control-label col-sm-2">Step Time (ms)</label>
+                        <div class="col-sm-3">
+                            <input id="testmode-interval" type="number" class="form-control" min="50" max="5000" step="1" value="250" required disabled>
+                            <p class="help-block">50–5000 ms per color, chase step, or blink state.</p>
+                        </div>
+                    </div>
+                    <div id="testmode-segment-group" class="form-group hidden">
+                        <label for="testmode-segment" class="control-label col-sm-2">Segment LEDs</label>
+                        <div class="col-sm-3">
+                            <input id="testmode-segment" type="number" class="form-control" min="1" max="1000" step="1" value="5" required disabled>
+                            <p class="help-block">Number of lit LEDs in the moving segment.</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="col-sm-offset-2 col-sm-10 testmode-actions">
+                            <button id="testmode-start" type="submit" class="btn btn-primary" disabled>Start Test</button>
+                            <button type="button" class="btn btn-danger testmode-stop">Stop Test &amp; Resume</button>
+                        </div>
+                    </div>
+                </form>
+            </fieldset>
         </div>
 
         <!-- Diagnostics -->

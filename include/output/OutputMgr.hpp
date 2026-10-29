@@ -26,6 +26,10 @@
 #include "memdebug.h"
 #include "FileMgr.hpp"
 #include <TimeLib.h>
+#include "TestModePatterns.hpp"
+#ifdef ARDUINO_ARCH_ESP32
+#include <freertos/semphr.h>
+#endif
 
 class c_OutputCommon; ///< forward declaration to the pure virtual output class that will be defined later.
 
@@ -63,6 +67,8 @@ public:
     void      TaskPoll          ();
     void      RelayUpdate       (uint8_t RelayId, String & NewValue, String & Response);
     void      ClearStatistics   (void);
+    bool      SetTestMode       (const JsonObject& request, String& error);
+    void      GetTestModeStatus (JsonObject& status);
 
     // handles to determine which output channel we are dealing with
     enum e_OutputChannelIds
@@ -244,6 +250,26 @@ private:
     bool ConfigInProgress   = false;
     bool OutputIsPaused     = false;
     bool BuildingNewConfig  = false;
+
+    struct TestModeSettings
+    {
+        bool active = false;
+        TestModePatterns::Pattern pattern = TestModePatterns::Pattern::Red;
+        int32_t output = -1;
+        uint32_t pixel = 1;
+        uint8_t brightness = 64;
+        uint32_t interval = 250;
+        uint32_t segment = 5;
+    } TestMode;
+    uint32_t TestStartedAt = 0;
+    uint32_t LastTestStep = uint32_t(-1);
+    bool InputTestPauseApplied = false;
+#ifdef ARDUINO_ARCH_ESP32
+    SemaphoreHandle_t OutputDataMutex = nullptr;
+#endif
+    void ServiceTestMode();
+    void RenderTestMode();
+    void StopTestMode(bool restoreOutputs = true);
 
     bool ProcessJsonConfig (JsonDocument & jsonConfig);
     void CreateJsonConfig  (JsonObject & jsonConfig);

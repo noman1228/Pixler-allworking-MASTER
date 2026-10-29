@@ -312,6 +312,7 @@ void c_EthernetDriver::onEventHandler (const WiFiEvent_t event, const WiFiEventI
         case ARDUINO_EVENT_ETH_DISCONNECTED:
         {
             // DEBUG_V ("ARDUINO_EVENT_ETH_DISCONNECTED");
+            logcon (F ("Ethernet link disconnected"));
             pCurrentFsmState->OnDisconnect ();
             break;
         }
@@ -524,7 +525,7 @@ void fsm_Eth_state_Boot::Init ()
 
     pEthernetDriver->SetFsmState (this);
     // pEthernetDriver->AnnounceState ();
-    pEthernetDriver->GetFsmTimer().StartTimer(10000, false);
+    pEthernetDriver->GetFsmTimer().StartTimer(0, false);
 
     // DEBUG_V(String("pEthernetDriver: 0x") + String(uint32_t(pEthernetDriver), HEX));
 

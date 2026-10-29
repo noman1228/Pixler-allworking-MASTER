@@ -178,5 +178,7 @@ public:
              bool IRAM_ATTR ISR_GetNextIntensityToSend (uint32_t &DataToSend);
     void                  SetPixelCount(uint32_t value) {pixel_count = value;}
     uint32_t              GetPixelCount() {return pixel_count;}
+    uint32_t              GetTestPixelCount() override;
+    void                  WriteTestPixel(uint32_t pixel, uint8_t red, uint8_t green, uint8_t blue) override;
 
 }; // c_OutputPixel

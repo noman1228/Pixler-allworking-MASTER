@@ -82,7 +82,7 @@ private:
     void onEventHandler         (const WiFiEvent_t event, const WiFiEventInfo_t info);
 
     FastTimer        NextPollTimer;
-    uint32_t         PollInterval = 1000;
+    uint32_t         PollInterval = 100;
     bool             HasBeenPreviouslyConfigured = false;
 
     IPAddress        ip        = INADDR_NONE;

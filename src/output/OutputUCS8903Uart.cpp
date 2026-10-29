@@ -188,8 +188,8 @@ void c_OutputUCS8903Uart::PauseOutput (bool State)
 {
     // DEBUG_START;
 
-    // c_OutputUCS8903::PauseOutput(State);
-    // Uart.PauseOutput(State);
+    c_OutputUCS8903::PauseOutput(State);
+    Uart.PauseOutput(State);
 
     // DEBUG_END;
 } // PauseOutput

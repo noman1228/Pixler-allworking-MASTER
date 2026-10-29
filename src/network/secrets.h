@@ -1,0 +1,2 @@
+#define SECRETS_SSID "THERIAULT-IOT"
+#define SECRETS_PASS "jasonmm28jt"

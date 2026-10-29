@@ -469,6 +469,41 @@ bool c_OutputRelay::ValidateGpio (gpio_num_t ConsoleTxGpio, gpio_num_t ConsoleRx
 } // ValidateGpio
 
 //----------------------------------------------------------------------------
+// Preserve the raw PWM/digital level so inversion and scaling restore exactly.
+// Applying another test must not replace the original snapshot.
+void c_OutputRelay::SetTestModePaused(bool paused, bool restore)
+{
+    if (paused == TestModePaused) { return; }
+    uint32_t index = 0;
+    for (auto& relay : OutputList)
+    {
+        if (relay.Enabled && relay.httpEnabled && relay.GpioId != gpio_num_t(-1))
+        {
+            if (paused)
+            {
+                TestModeSavedValues[index] = relay.previousValue;
+                OutputValue(relay, 0);
+            }
+            else if (restore)
+            {
+                const uint8_t value = TestModeSavedValues[index];
+                if (relay.Pwm)
+                {
+#if defined(ARDUINO_ARCH_ESP32)
+                    ledcWrite(relay.ChannelIndex, value);
+#else
+                    analogWrite(relay.GpioId, value);
+#endif
+                }
+                else { digitalWrite(uint8_t(relay.GpioId), value); }
+                relay.previousValue = value;
+            }
+        }
+        ++index;
+    }
+    TestModePaused = paused;
+}
+
 void c_OutputRelay::RelayUpdate (uint8_t RelayId, String & NewValue, String & Response)
 {
     // DEBUG_START;

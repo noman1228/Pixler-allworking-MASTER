@@ -34,6 +34,23 @@
 // needs to be last
 #include "input/InputMgr.hpp"
 
+#ifdef ARDUINO_ARCH_ESP32
+namespace
+{
+    class InputStateGuard
+    {
+        SemaphoreHandle_t mutex;
+    public:
+        explicit InputStateGuard(SemaphoreHandle_t value) : mutex(value)
+        { if (mutex) { xSemaphoreTakeRecursive(mutex, portMAX_DELAY); } }
+        ~InputStateGuard() { if (mutex) { xSemaphoreGiveRecursive(mutex); } }
+    };
+}
+#define INPUT_STATE_GUARD InputStateGuard stateGuard(InputStateMutex)
+#else
+#define INPUT_STATE_GUARD
+#endif
+
 #define AllocateInput(ClassType, Input, ChannelIndex, InputType, InputDataBufferSize) \
 { \
     static_assert(InputDriverMemorySize >= sizeof(ClassType)); \
@@ -172,6 +189,9 @@ c_InputMgr::~c_InputMgr ()
 ///< Start the module
 void c_InputMgr::Begin (uint32_t BufferSize)
 {
+#ifdef ARDUINO_ARCH_ESP32
+    if (!InputStateMutex) { InputStateMutex = xSemaphoreCreateRecursiveMutex(); }
+#endif
     // DEBUG_START;
 
     // DEBUG_V(String("Current CPU ID: ") + String(xPortGetCoreID()));
@@ -644,6 +664,8 @@ void c_InputMgr::InstantiateNewInputChannel (e_InputChannelIds ChannelIndex, e_I
 */
 void c_InputMgr::LoadConfig ()
 {
+    INPUT_STATE_GUARD;
+    if (TestModePaused) { return; }
     // DEBUG_START;
 
     ConfigLoadNeeded = NO_CONFIG_NEEDED;
@@ -672,6 +694,7 @@ void c_InputMgr::LoadConfig ()
     }
 
     configInProgress = false;
+    ApplyOperationalState();
     // DEBUG_END;
 
 } // LoadConfig
@@ -680,12 +703,13 @@ void c_InputMgr::LoadConfig ()
 ///< Called from loop(), renders Input data
 void c_InputMgr::Process ()
 {
+    INPUT_STATE_GUARD;
     // DEBUG_START;
     // do we need to save the current config?
 
     do // once
     {
-        if (configInProgress || PauseProcessing)
+        if (configInProgress || PauseProcessing || TestModePaused)
         {
             // prevent calls to process when we are doing a long operation
             break;
@@ -754,6 +778,8 @@ void c_InputMgr::Process ()
 //-----------------------------------------------------------------------------
 void c_InputMgr::ProcessButtonActions (c_ExternalInput::InputValue_t value)
 {
+    INPUT_STATE_GUARD;
+    if (PauseProcessing || TestModePaused) { return; }
     // DEBUG_START;
 
     for(auto & CurrentInput : InputChannelDrivers)
@@ -1014,6 +1040,7 @@ void c_InputMgr::SetConfig(JsonDocument & NewConfigData)
 //-----------------------------------------------------------------------------
 void c_InputMgr::SetBufferInfo (uint32_t BufferSize)
 {
+    INPUT_STATE_GUARD;
     // DEBUG_START;
 
     InputDataBufferSize = BufferSize;
@@ -1039,10 +1066,26 @@ void c_InputMgr::SetBufferInfo (uint32_t BufferSize)
 //-----------------------------------------------------------------------------
 void c_InputMgr::SetOperationalState (bool ActiveFlag)
 {
+    INPUT_STATE_GUARD;
     // DEBUG_START;
     // DEBUG_V(String("ActiveFlag: ") + String(ActiveFlag));
 
     PauseProcessing = !ActiveFlag;
+    ApplyOperationalState();
+}
+
+// Test mode is an independent pause reason. Service input requests cannot
+// restart normal processing until test mode relinquishes the outputs.
+void c_InputMgr::SetTestModePaused(bool Paused)
+{
+    INPUT_STATE_GUARD;
+    TestModePaused = Paused;
+    ApplyOperationalState();
+}
+
+void c_InputMgr::ApplyOperationalState()
+{
+    const bool ActiveFlag = !PauseProcessing && !TestModePaused;
 
     // pass through each active interface and set the active state
     for (auto & CurrentInput : InputChannelDrivers)
@@ -1062,6 +1105,7 @@ void c_InputMgr::SetOperationalState (bool ActiveFlag)
 //-----------------------------------------------------------------------------
 void c_InputMgr::NetworkStateChanged (bool _IsConnected)
 {
+    INPUT_STATE_GUARD;
     // DEBUG_START;
 
     IsConnected = _IsConnected;

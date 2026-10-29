@@ -730,6 +730,12 @@ uint32_t IRAM_ATTR c_OutputPixel::GetIntensityData()
 {
     uint32_t response = 0;
 
+    if (!pOutputBuffer || PixelIntensityCurrentIndex >= OutputBufferSize)
+    {
+        FrameStateFuncPtr = &c_OutputPixel::FrameDone;
+        return 0;
+    }
+
     response = pOutputBuffer[PixelIntensityCurrentIndex];
 
     ++PixelIntensityCurrentIndex;
@@ -883,6 +889,31 @@ void c_OutputPixel::WriteChannelData(uint32_t StartChannelId, uint32_t ChannelCo
     // DEBUG_END;
 
 } // WriteChannelData
+
+// Physical test addressing deliberately bypasses grouping and zig-zag. The
+// stored color order and the configured intensity correction still apply.
+uint32_t c_OutputPixel::GetTestPixelCount()
+{
+    return min(pixel_count, OutputBufferSize / NumIntensityBytesPerPixel);
+}
+
+void c_OutputPixel::WriteTestPixel(uint32_t pixel, uint8_t red, uint8_t green, uint8_t blue)
+{
+    if (!pOutputBuffer || pixel >= GetTestPixelCount()) { return; }
+    uint8_t colors[4] = {red, green, blue, 0};
+    if (NumIntensityBytesPerPixel == 4 && red == green && green == blue)
+    {
+        colors[3] = red;
+        colors[0] = colors[1] = colors[2] = 0;
+    }
+    uint8_t* target = pOutputBuffer + pixel * NumIntensityBytesPerPixel;
+    for (uint32_t color = 0; color < NumIntensityBytesPerPixel; ++color)
+    {
+        const uint8_t value = colors[color];
+        target[ColorOffsets.Array[color]] = MonsterPermanentRgb ? value :
+            uint8_t((uint32_t(gamma_table[value]) * AdjustedBrightness) >> 8);
+    }
+}
 
 //----------------------------------------------------------------------------
 void c_OutputPixel::ReadChannelData(uint32_t StartChannelId, uint32_t ChannelCount, byte *pTargetData)

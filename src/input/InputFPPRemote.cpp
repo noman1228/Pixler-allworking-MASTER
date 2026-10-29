@@ -377,6 +377,7 @@ bool c_InputFPPRemote::SetConfig (JsonObject& jsonConfig)
 //-----------------------------------------------------------------------------
 void c_InputFPPRemote::SetOperationalState (bool ActiveFlag)
 {
+    c_InputCommon::SetOperationalState(ActiveFlag);
     // DEBUG_START;
 
     if(pInputFPPRemotePlayItem)
