@@ -1,0 +1,104 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "FullBuild: Build",
+      "type": "process",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}\\.scriptsJT\\FullBuild.py",
+        "build"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "FullBuild: Build and flash",
+      "type": "process",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}\\.scriptsJT\\FullBuild.py",
+        "flash"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "FullBuild: Full (build, flash, monitor)",
+      "type": "process",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}\\.scriptsJT\\FullBuild.py",
+        "full"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "FullBuild: Monitor",
+      "type": "process",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}\\.scriptsJT\\FullBuild.py",
+        "monitor"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "FullBuild: Clean",
+      "type": "process",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}\\.scriptsJT\\FullBuild.py",
+        "clean"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "clean",
+      "problemMatcher": []
+    },
+    {
+      "label": "FullBuild: Backup firmware",
+      "type": "process",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}\\.scriptsJT\\FullBuild.py",
+        "backup"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "FullBuild: Create EFU",
+      "type": "process",
+      "command": "python",
+      "args": [
+        "-m",
+        "platformio",
+        "run",
+        "-t",
+        "post_efu"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

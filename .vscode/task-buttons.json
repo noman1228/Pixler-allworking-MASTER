@@ -1,0 +1,46 @@
+{
+  "buttons": [
+    {
+      "name": "Build",
+      "task": "FullBuild: Build",
+      "icon": "$(tools)",
+      "tooltip": "Build firmware without flashing"
+    },
+    {
+      "name": "Build + Flash",
+      "task": "FullBuild: Build and flash",
+      "icon": "$(run)",
+      "tooltip": "Build as needed and flash the connected device"
+    },
+    {
+      "name": "Full",
+      "task": "FullBuild: Full (build, flash, monitor)",
+      "icon": "$(play)",
+      "tooltip": "Build, flash, then start the serial monitor"
+    },
+    {
+      "name": "Monitor",
+      "task": "FullBuild: Monitor",
+      "icon": "$(terminal)",
+      "tooltip": "Open the serial monitor"
+    },
+    {
+      "name": "Clean",
+      "task": "FullBuild: Clean",
+      "icon": "$(trash)",
+      "tooltip": "Clean build artifacts"
+    },
+    {
+      "name": "Backup",
+      "task": "FullBuild: Backup firmware",
+      "icon": "$(save)",
+      "tooltip": "Back up firmware from the connected device"
+    },
+    {
+      "name": "Create EFU",
+      "task": "FullBuild: Create EFU",
+      "icon": "$(package)",
+      "tooltip": "Build firmware and filesystem, then create a validated EFU package"
+    }
+  ]
+}

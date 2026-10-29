@@ -1,5 +1,7 @@
 .pio
-.vscode
+.vscode/*
+!.vscode/tasks.json
+!.vscode/task-buttons.json
 .scriptsJT
 .data
 .debug
@@ -9,3 +11,4 @@ node_modules
 tools
 tests
 dist
+data
