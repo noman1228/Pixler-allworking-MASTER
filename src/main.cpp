@@ -106,7 +106,7 @@ uint32_t RebootCount = NotRebootingValue;
 uint32_t lastUpdate;                // Update timeout tracker
 bool     ResetWiFi = false;
 bool     IsBooting = true;  // Configuration initialization flag
-time_t   ConfigLoadNeeded = NO_CONFIG_NEEDED;
+DeferredConfigReload ConfigReload;
 bool     ConfigSaveNeeded = false;
 
 uint32_t DiscardedRxData = 0;
@@ -117,9 +117,7 @@ uint32_t DiscardedRxData = 0;
 //
 /////////////////////////////////////////////////////////
 
-#define NO_CONFIG_NEEDED time_t(-1)
-
-void ScheduleLoadConfig() {ConfigLoadNeeded = now(); }
+void ScheduleLoadConfig() {ConfigReload.Schedule(millis()); OutputMgr.RequestConfigReloadStop(); }
 void LoadConfig();
 void GetConfig (JsonObject & json);
 void GetDriverName (String & Name) { Name = F("ESP"); }
@@ -442,8 +440,6 @@ void LoadConfig()
 {
     // DEBUG_START;
 
-    ConfigLoadNeeded = NO_CONFIG_NEEDED;
-
     String temp;
     // DEBUG_V ("");
     ConfigSaveNeeded |= !FileMgr.LoadFlashFile (ConstConfig.ConfigFileName, &deserializeCoreHandler);
@@ -558,6 +554,7 @@ void loop()
     FeedWDT ();
     // Poll output
     OutputMgr.Poll ();
+    InputMgr.PollConfig();
     // DEBUG_V();
     FeedWDT ();
     // DEBUG_V();
@@ -597,13 +594,10 @@ void loop()
         }
     }
 
-    if (NO_CONFIG_NEEDED != ConfigLoadNeeded)
+    if (ConfigReload.TakeIfDue(millis(), LOAD_CONFIG_DELAY * 1000u))
     {
-        if(abs(now() - ConfigLoadNeeded) > LOAD_CONFIG_DELAY)
-        {
-            FeedWDT ();
-            LoadConfig ();
-        }
+        FeedWDT ();
+        LoadConfig ();
     }
 
     if (ConfigSaveNeeded)

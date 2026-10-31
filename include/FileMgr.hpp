@@ -59,7 +59,6 @@ public:
     void    GetConfig (JsonObject& json);
     bool    SetConfig (JsonObject& json);
     void    GetStatus (JsonObject& json);
-    void    UpdateFtp ();
 
     bool    handleFileUpload (const String & filename, size_t index, uint8_t * data, size_t len, bool final, uint32_t totalLen);
     void    AbortSdFileUpload();
@@ -82,7 +81,7 @@ public:
     };
 
     void   DeleteFlashFile (String FileName);
-    void   RenameFlashFile (String OldName, String NewName);
+    bool   RenameFlashFile (String OldName, String NewName);
     bool   SaveFlashFile   (const String & FileName, String & FileData);
     bool   SaveFlashFile   (const String & FileName, const char * FileData);
     bool   SaveFlashFile   (const String & FileName, JsonDocument & FileData);

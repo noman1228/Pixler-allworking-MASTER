@@ -27,6 +27,7 @@
 #include "FileMgr.hpp"
 #include <TimeLib.h>
 #include "TestModePatterns.hpp"
+#include "DeferredConfigReload.hpp"
 #ifdef ARDUINO_ARCH_ESP32
 #include <freertos/semphr.h>
 #endif
@@ -47,7 +48,8 @@ public:
 
     void      Begin             ();                        ///< set up the operating environment based on the current config (or defaults)
     void      Poll              ();                        ///< Call from loop(),  renders output data
-    void      ScheduleLoadConfig () {ConfigLoadNeeded = now();}
+    void      ScheduleLoadConfig () {ConfigReload.Schedule(millis()); RequestConfigReloadStop();}
+    void      RequestConfigReloadStop() {ConfigReloadStopRequested.store(true, std::memory_order_release);}
     void      LoadConfig        ();                        ///< Read the current configuration data from nvram
     void      GetConfig         (byte * Response, uint32_t maxlen);
     void      GetConfig         (String & Response);
@@ -244,9 +246,8 @@ private:
     DriverInfo_t OutputChannelDrivers[OutputChannelId_End];
 
     // configuration parameter names for the channel manager within the config file
-    #define NO_CONFIG_NEEDED time_t(-1)
     bool HasBeenInitialized = false;
-    time_t ConfigLoadNeeded = NO_CONFIG_NEEDED;
+    DeferredConfigReload ConfigReload;
     bool ConfigInProgress   = false;
     bool OutputIsPaused     = false;
     bool BuildingNewConfig  = false;
@@ -264,6 +265,7 @@ private:
     uint32_t TestStartedAt = 0;
     uint32_t LastTestStep = uint32_t(-1);
     bool InputTestPauseApplied = false;
+    std::atomic<bool> ConfigReloadStopRequested{false};
 #ifdef ARDUINO_ARCH_ESP32
     SemaphoreHandle_t OutputDataMutex = nullptr;
 #endif

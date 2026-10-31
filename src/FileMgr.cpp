@@ -287,17 +287,6 @@ void c_FileMgr::StartSdCard ()
 } // StartSdCard
 
 //-----------------------------------------------------------------------------
-//    Cause the FTP operation to get re-established.
-void c_FileMgr::UpdateFtp()
-{
-    // DEBUG_START;
-
-    NetworkStateChanged(NetworkMgr.IsConnected());
-
-    // DEBUG_END;
-} // UpdateFtp
-
-//-----------------------------------------------------------------------------
 void c_FileMgr::NetworkStateChanged (bool NewState)
 {
     // DEBUG_START;
@@ -704,17 +693,19 @@ void c_FileMgr::DeleteFlashFile (String FileName)
 
     if(LittleFS.exists(FileName)) { LittleFS.remove (FileName); }
 
-    if(!FileName.equals(CN_fseqfilelist))
+#ifdef SIMULATE_SD
+    if(FileName.startsWith(CN_slashsdslash))
     {
         BuildFseqList(false);
     }
+#endif
 
     // DEBUG_END;
 
 } // DeleteConfigFile
 
 //-----------------------------------------------------------------------------
-void c_FileMgr::RenameFlashFile (String OldName, String NewName)
+bool c_FileMgr::RenameFlashFile (String OldName, String NewName)
 {
      // DEBUG_START;
 
@@ -724,13 +715,23 @@ void c_FileMgr::RenameFlashFile (String OldName, String NewName)
      // DEBUG_V(String("OldName: ") + OldName);
      // DEBUG_V(String("NewName: ") + NewName);
 
-    DeleteFlashFile(NewName);
+    // LittleFS replaces an existing file in the rename operation. Keep the
+    // previous config available until this succeeds, including on failure.
     if(!LittleFS.rename(OldName, NewName))
     {
         logcon(String(CN_stars) + F("Could not rename '") + OldName + F("' to '") + NewName + F("'") + CN_stars);
+        return false;
     }
 
+#ifdef SIMULATE_SD
+    if(OldName.startsWith(CN_slashsdslash) || NewName.startsWith(CN_slashsdslash))
+    {
+        BuildFseqList(false);
+    }
+#endif
+
      // DEBUG_END;
+    return true;
 } // RenameFlashFile
 
 //-----------------------------------------------------------------------------
@@ -943,14 +944,16 @@ bool c_FileMgr::SaveFlashFile(const String & FileName, uint32_t index, uint8_t *
     // DEBUG_V(String("               final: ") + String(final));
 
     fs::File file;
+    String FilePath = FileName;
+    ConnrectFilename(FilePath);
 
     if(0 == index)
     {
-        file = LittleFS.open(FileName.c_str(), CN_w);
+        file = LittleFS.open(FilePath.c_str(), CN_w);
     }
     else
     {
-        file = LittleFS.open(FileName.c_str(), "a");
+        file = LittleFS.open(FilePath.c_str(), "a");
     }
     // DEBUG_V("");
 
@@ -961,7 +964,13 @@ bool c_FileMgr::SaveFlashFile(const String & FileName, uint32_t index, uint8_t *
     else
     {
         // DEBUG_V("");
-        file.seek(int(index), SeekMode::SeekSet);
+        // Refuse missing, repeated, or out-of-order chunks rather than
+        // committing a partial config over the previous good file.
+        if (file.size() != index || !file.seek(index, SeekMode::SeekSet))
+        {
+            file.close();
+            return false;
+        }
         // DEBUG_V("");
 
         size_t NumBytesSaved = file.write(data, size_t(len));
@@ -971,7 +980,7 @@ bool c_FileMgr::SaveFlashFile(const String & FileName, uint32_t index, uint8_t *
 
         logcon(CfgFileMessagePrefix + String(F("saved ")) + String(NumBytesSaved) + F(" bytes."));
 
-        Response = true;
+        Response = (NumBytesSaved == len);
     }
 
     // DEBUG_END;

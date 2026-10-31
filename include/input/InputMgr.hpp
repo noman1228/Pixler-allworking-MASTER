@@ -26,6 +26,7 @@
 #include "FileMgr.hpp"
 #include "output/OutputMgr.hpp"
 #include "externalInput.h"
+#include "DeferredConfigReload.hpp"
 #include <TimeLib.h>
 #include <Ticker.h>
 #ifdef ARDUINO_ARCH_ESP32
@@ -54,7 +55,8 @@ public:
 
     void Begin                (uint32_t BufferSize);
     void LoadConfig           ();
-    void ScheduleLoadConfig   () {ConfigLoadNeeded = now();}
+    void ScheduleLoadConfig   () {ConfigReload.Schedule(millis()); OutputMgr.RequestConfigReloadStop();}
+    void PollConfig           ();
     void GetConfig            (byte * Response, uint32_t maxlen);
     void GetStatus            (JsonObject & jsonStatus);
     void SetConfig            (const char * NewConfig);
@@ -102,7 +104,6 @@ private:
         bool                DriverInUse = false;
     };
 
-    #define NO_CONFIG_NEEDED time_t(-1)
     #define INPUTMGR_TASK_PRIORITY 5
 
     DriverInfo_t    InputChannelDrivers[InputChannelId_End]; ///< pointer(s) to the current active Input driver
@@ -112,7 +113,7 @@ private:
     bool            EffectEngineIsConfiguredToRun[InputChannelId_End];
     bool            IsConnected         = false;
     bool            configInProgress    = false;
-    time_t          ConfigLoadNeeded    = NO_CONFIG_NEEDED;
+    DeferredConfigReload ConfigReload;
     bool            PauseProcessing     = false;
     bool            TestModePaused      = false;
     bool            FileExtractionPaused = false;

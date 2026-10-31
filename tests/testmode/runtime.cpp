@@ -10,6 +10,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 #include "output/TestModePatterns.hpp"
 
 class String : public std::string
@@ -103,6 +104,18 @@ struct c_OutputPixel : c_OutputCommon
     c_OutputPixel() { for (uint32_t i = 0; i < 256; ++i) gamma_table[i] = uint8_t(i); }
 };
 
+struct ObservedPixel : c_OutputPixel
+{
+    unsigned physicalWrites = 0;
+    std::function<void()> afterPhysicalWrite;
+    void WriteTestPixel(uint32_t pixel, uint8_t red, uint8_t green, uint8_t blue) override
+    {
+        c_OutputPixel::WriteTestPixel(pixel, red, green, blue);
+        ++physicalWrites;
+        if (afterPhysicalWrite) { afterPhysicalWrite(); }
+    }
+};
+
 struct c_OutputMgr
 {
     static constexpr int OutputChannelId_End = 4;
@@ -140,6 +153,7 @@ struct c_OutputMgr
     uint32_t TestStartedAt = 0;
     uint32_t LastTestStep = uint32_t(-1);
     bool InputTestPauseApplied = false;
+    std::atomic<bool> ConfigReloadStopRequested{false};
     bool SetTestMode(const JsonObject& request, String& error);
     void GetTestModeStatus(JsonObject& status);
     void ServiceTestMode();
@@ -226,7 +240,7 @@ int main()
     c_InputCommon primary, secondary;
     InputMgr.InputChannelDrivers[0] = {&primary, true};
     InputMgr.InputChannelDrivers[1] = {&secondary, true};
-    c_OutputPixel rgb, rgbw;
+    ObservedPixel rgb, rgbw;
     c_OutputCommon other, disabled;
     rgb.pixel_count = 10;
     rgb.OutputBufferSize = 30;
@@ -255,6 +269,75 @@ int main()
     for (uint32_t i = 0; i < 10; ++i) assert(rgb.pOutputBuffer[i * 3] == 64);
     for (uint32_t i = 0; i < 7; ++i) assert(rgbw.pOutputBuffer[i * 4] == 64);
     for (uint32_t i = 58; i < 66; ++i) assert(OutputMgr.OutputBuffer[i] == 0);
+
+    // Solid colors and the manual count marker must remain untouched across
+    // timer intervals. RMT reads asynchronously without the data mutex, so an
+    // unnecessary clear-and-refill can appear as a black flash on the wire.
+    for (const char* pattern : {"red", "green", "blue", "white", "count"})
+    {
+        for (unsigned brightness : {1U, 64U, 255U})
+        {
+            for (unsigned interval : {50U, 5000U})
+            {
+                testClock = 100;
+                const std::string request = std::string("{\"active\":true,\"pattern\":\"") + pattern +
+                    "\",\"output\":0,\"pixel\":3,\"segment\":2,\"brightness\":" +
+                    std::to_string(brightness) + ",\"interval\":" + std::to_string(interval) + "}";
+                assert(command(request.c_str()));
+                const std::vector<byte> initial(std::begin(OutputMgr.OutputBuffer), std::end(OutputMgr.OutputBuffer));
+                const unsigned writes = rgb.physicalWrites + rgbw.physicalWrites;
+                const uint32_t startedAt = OutputMgr.TestStartedAt;
+                for (unsigned tick = 1; tick <= 12; ++tick)
+                {
+                    testClock = 100 + tick * interval;
+                    { OUTPUT_DATA_GUARD; OutputMgr.RenderTestMode(); }
+                    assert(rgb.physicalWrites + rgbw.physicalWrites == writes);
+                    assert(std::equal(initial.begin(), initial.end(), std::begin(OutputMgr.OutputBuffer)));
+                }
+                // Repeated Apply with identical options must preserve the
+                // buffer and original start time, including partial requests.
+                assert(command(request.c_str()));
+                assert(command("{\"active\":true}"));
+                assert(rgb.physicalWrites + rgbw.physicalWrites == writes);
+                assert(OutputMgr.TestStartedAt == startedAt);
+                assert(std::equal(initial.begin(), initial.end(), std::begin(OutputMgr.OutputBuffer)));
+            }
+        }
+    }
+
+    // At an asynchronous read boundary after every pixel write, an RGB cycle
+    // may show old or new colors but must never expose a blanket zeroed frame.
+    testClock = 0;
+    assert(command("{\"active\":true,\"pattern\":\"rgb\",\"output\":0,\"brightness\":64,\"interval\":50}"));
+    unsigned backgroundReads = 0;
+    rgb.afterPhysicalWrite = [&] {
+        ++backgroundReads;
+        for (unsigned pixel = 0; pixel < rgb.pixel_count; ++pixel)
+        {
+            const byte* data = rgb.pOutputBuffer + pixel * 3;
+            assert(data[0] || data[1] || data[2]);
+        }
+    };
+    const unsigned beforeAnimation = rgb.physicalWrites;
+    for (unsigned tick = 1; tick <= 6; ++tick)
+    {
+        testClock = tick * 50;
+        { OUTPUT_DATA_GUARD; OutputMgr.RenderTestMode(); }
+        assert(rgb.physicalWrites == beforeAnimation + tick * rgb.pixel_count);
+    }
+    assert(backgroundReads == 6 * rgb.pixel_count);
+    rgb.afterPhysicalWrite = {};
+    const unsigned animationWrites = rgb.physicalWrites;
+    const uint32_t animationStartedAt = OutputMgr.TestStartedAt;
+    assert(command("{\"active\":true}"));
+    assert(rgb.physicalWrites == animationWrites && OutputMgr.TestStartedAt == animationStartedAt);
+    testClock = 350;
+    { OUTPUT_DATA_GUARD; OutputMgr.RenderTestMode(); }
+    assert(rgb.physicalWrites == animationWrites + rgb.pixel_count);
+    assert(rgb.pOutputBuffer[0] == 0 && rgb.pOutputBuffer[1] == 64 && rgb.pOutputBuffer[2] == 0);
+
+    testClock = 0;
+    assert(command("{\"active\":true,\"pattern\":\"red\",\"output\":-1,\"pixel\":1,\"segment\":5,\"brightness\":64,\"interval\":250}"));
 
     // Rejecting a bad command leaves the existing active test intact.
     for (const char* invalid : {

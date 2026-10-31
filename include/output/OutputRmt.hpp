@@ -99,7 +99,8 @@ private:
     OutputRmtConfig_t   OutputRmtConfig;
 
     rmt_item32_t        Intensity2Rmt[RmtDataBitIdType_t::RMT_LIST_END];
-    bool                OutputIsPaused   = false;
+    // The manager resumes transmission after protocol setup and buffer mapping.
+    bool                OutputIsPaused   = true;
 
     uint32_t            NumRmtSlotsPerIntensityValue      = 8;
     uint32_t            NumRmtSlotOverruns                = 0;
@@ -137,7 +138,7 @@ public:
 
     void Begin                                  (OutputRmtConfig_t config, c_OutputCommon * pParent);
     bool StartNewFrame                          ();
-    bool StartNextFrame                         () { return ((nullptr != pParent) & (!OutputIsPaused)) ? pParent->RmtPoll() : false; }
+    bool StartNextFrame                         () { return HasBeenInitialized && pParent && !OutputIsPaused ? pParent->RmtPoll() : false; }
     void GetStatus                              (ArduinoJson::JsonObject& jsonStatus);
     void PauseOutput                            (bool State);
     void GetDriverName                          (String &value)  { value = CN_RMT; }

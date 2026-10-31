@@ -668,7 +668,6 @@ void c_InputMgr::LoadConfig ()
     if (TestModePaused || FileExtractionPaused) { return; }
     // DEBUG_START;
 
-    ConfigLoadNeeded = NO_CONFIG_NEEDED;
     configInProgress = true;
     // try to load and process the config file
     if (!FileMgr.LoadFlashFile (ConfigFileName, [this](JsonDocument & JsonConfigDoc)
@@ -699,13 +698,24 @@ void c_InputMgr::LoadConfig ()
 
 } // LoadConfig
 
+// Apply saved settings on the main-loop core, independently of traffic pauses.
+void c_InputMgr::PollConfig()
+{
+    INPUT_STATE_GUARD;
+    if (configInProgress || TestModePaused || FileExtractionPaused) { return; }
+    if (ConfigReload.TakeIfDue(millis(), LOAD_CONFIG_DELAY * 1000u))
+    {
+        LoadConfig();
+    }
+}
+
 //-----------------------------------------------------------------------------
 ///< Called from loop(), renders Input data
 void c_InputMgr::Process ()
 {
     INPUT_STATE_GUARD;
     // DEBUG_START;
-    // do we need to save the current config?
+    // Poll active inputs; saved settings are applied by the main loop.
 
     do // once
     {
@@ -716,17 +726,6 @@ void c_InputMgr::Process ()
         }
 
         ExternalInput.Poll ();
-
-        if (NO_CONFIG_NEEDED != ConfigLoadNeeded)
-        {
-            if(abs(now() - ConfigLoadNeeded) > LOAD_CONFIG_DELAY)
-            {
-                // DEBUG_V ("Reload the config");
-                FeedWDT();
-                LoadConfig ();
-                // DEBUG_V ("End Save Config");
-            }
-        }
 
         if(RebootInProgress())
         {
@@ -938,8 +937,8 @@ bool c_InputMgr::ProcessJsonConfig (JsonObject & jsonConfig)
             }
         } // end for each channel
 
-        // let the file manager restart FTP if it can.
-        FileMgr.UpdateFtp();
+        // FTP follows the network and FileMgr settings. Restarting it here
+        // races the main loop's handleFTP() from the input task on ESP32.
 
         Response = true;
 

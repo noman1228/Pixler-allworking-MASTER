@@ -23,6 +23,7 @@ def main():
         "void c_InputMgr::Process ()",
         "void c_InputMgr::ProcessButtonActions (",
         "void c_InputMgr::LoadConfig ()",
+        "void c_InputMgr::PollConfig()",
     )
     (BUILD / "input_methods.inc").write_text("\n".join(method(input_source, name) for name in signatures), encoding="utf-8")
     remote = (ROOT / "src/input/InputFPPRemote.cpp").read_text(encoding="utf-8-sig")
@@ -41,7 +42,7 @@ def main():
     if json_header is None:
         raise RuntimeError("ArduinoJson dependency missing; run PlatformIO build first")
     host_runner.BUILD = BUILD
-    command, executable = host_runner.compiler_command(ROOT / "tests/unzip/input_pause.cpp", "input-pause-tests", [BUILD, json_header.parent])
+    command, executable = host_runner.compiler_command(ROOT / "tests/unzip/input_pause.cpp", "input-pause-tests", [ROOT / "include", BUILD, json_header.parent])
     subprocess.run(command, cwd=BUILD, check=True)
     subprocess.run([str(executable)], cwd=BUILD, check=True)
 

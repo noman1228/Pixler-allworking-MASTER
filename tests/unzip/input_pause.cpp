@@ -4,13 +4,12 @@
 #include <mutex>
 #include <new>
 #include <thread>
+#include "DeferredConfigReload.hpp"
 
 #define SUPPORT_FPP
 #define INPUT_STATE_GUARD std::lock_guard<std::recursive_mutex> stateGuard(InputStateMutex)
-#define NO_CONFIG_NEEDED std::time_t(-1)
 static constexpr unsigned LOAD_CONFIG_DELAY = 1;
 static bool IsBooting = false;
-static std::time_t now() { return 100; }
 static const String InputRebootReason;
 static std::atomic<unsigned> openHandles{0}, closedHandles{0}, playerDestructions{0}, starts{0};
 static unsigned invalidHeapDeletions = 0;
@@ -31,7 +30,7 @@ public:
     struct Driver { c_InputCommon* InputDriver = nullptr; bool DriverInUse = false; } InputChannelDrivers[2];
     bool PauseProcessing = false, TestModePaused = false, FileExtractionPaused = false, configInProgress = false, RebootNeeded = false;
     std::recursive_mutex InputStateMutex;
-    std::time_t ConfigLoadNeeded = NO_CONFIG_NEEDED;
+    DeferredConfigReload ConfigReload;
     String ConfigFileName = "input.json";
     c_ExternalInput ExternalInput;
     unsigned configLoads = 0;
@@ -40,6 +39,7 @@ public:
     void SetTestModePaused(bool);
     void ApplyOperationalState();
     void Process();
+    void PollConfig();
     void ProcessButtonActions(c_ExternalInput::InputValue_t);
     void LoadConfig();
     void ProcessJsonConfig(JsonObject&) { ++configLoads; }
@@ -169,10 +169,11 @@ static void exerciseReasons(bool priorUploadPause, bool priorTestPause, bool rem
     manager.Process();
     manager.ProcessButtonActions(c_ExternalInput::InputValue_t::Pressed);
     require(starts == before && networkInput.buttons == 0, "Input processing restarted playback during extraction");
-    manager.ConfigLoadNeeded = 0;
+    manager.ConfigReload.Schedule(millis() - 2000u);
     auto configs = manager.configLoads;
     manager.LoadConfig();
-    require(manager.ConfigLoadNeeded == 0 && manager.configLoads == configs, "Extraction performed a pending config reload");
+    manager.PollConfig();
+    require(manager.ConfigReload.IsDue(millis(), 0) && manager.configLoads == configs, "Extraction performed a pending config reload");
     manager.SetOperationalState(true);
     manager.SetTestModePaused(false);
     require(!networkInput.active && !player.active, "Upload/test completion bypassed extraction pause");
@@ -182,12 +183,14 @@ static void exerciseReasons(bool priorUploadPause, bool priorTestPause, bool rem
     manager.SetTestModePaused(priorTestPause);
     manager.SetFileExtractionPaused(false);
     require(player.active == (!priorUploadPause && !priorTestPause), "Extraction resume ignored another active pause reason");
+    manager.PollConfig();
     manager.Process();
     require(openHandles == ((!priorUploadPause && !priorTestPause) ? 1U : 0U), "Playback resumed under another pause or failed to reopen after extraction");
     manager.SetOperationalState(true);
     manager.SetTestModePaused(false);
+    manager.PollConfig();
     manager.Process();
-    require(openHandles == 1 && manager.ConfigLoadNeeded == NO_CONFIG_NEEDED, "Playback/config reload did not resume after all pause reasons cleared");
+    require(openHandles == 1 && !manager.ConfigReload.IsDue(millis(), 0), "Playback/config reload did not resume after all pause reasons cleared");
     manager.SetFileExtractionPaused(true);
     require(openHandles == 0, "Final extraction pause leaked a playback handle");
 }

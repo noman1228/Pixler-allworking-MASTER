@@ -457,6 +457,7 @@ void c_WebMgr::init ()
         webServer.on ("/conf", HTTP_PUT | HTTP_POST | HTTP_OPTIONS,
         	[this](AsyncWebServerRequest* request)
         	{
+                if (request->getResponse()) { return; }
                 String RequestFileName = request->url().substring(6);
                 WebRequestMethodComposite RequestMethod = request->method();
                 // DEBUG_V(String("  RequestMethod: ") + String(RequestMethod));
@@ -474,7 +475,20 @@ void c_WebMgr::init ()
                         (HTTP_PUT  == RequestMethod))
                 {
                     // DEBUG_V(String("           url: ") + request->url());
-                    FileMgr.RenameFlashFile(RequestFileName + ".tmp", RequestFileName);
+                    if (!RequestFileName.equals(F("config.json")) &&
+                        !RequestFileName.equals(F("input_config.json")) &&
+                        !RequestFileName.equals(F("output_config.json")))
+                    {
+                        FileMgr.DeleteFlashFile(RequestFileName + ".tmp");
+                        request->send (404, CN_applicationSLASHjson, F("{\"status\":\"File Not supported\"}"));
+                        return;
+                    }
+                    if (!FileMgr.RenameFlashFile(RequestFileName + ".tmp", RequestFileName))
+                    {
+                        FileMgr.DeleteFlashFile(RequestFileName + ".tmp");
+                        request->send (500, CN_applicationSLASHjson, F("{\"status\":\"Could not replace config\"}"));
+                        return;
+                    }
                     if(RequestReadConfigFile(RequestFileName))
                     {
                         request->send (200, CN_applicationSLASHjson, F("{\"status\":\"XFER Complete\"}"));
@@ -496,6 +510,7 @@ void c_WebMgr::init ()
 
         	[this](AsyncWebServerRequest *request, String filename, uint32_t index, uint8_t *data, uint32_t len, bool final)
         	{
+                if (request->getResponse()) { return; }
                 // DEBUG_V("Save File Chunk - Start");
                 // DEBUG_V(String("  url: ") + request->url());
                 // DEBUG_V(String("  len: ") + String(len));
@@ -504,12 +519,6 @@ void c_WebMgr::init ()
                 // DEBUG_V(String(" file: ") + filename);
                 // DEBUG_V(String("final: ") + String(final));
                 DelayReboot(10000);
-                if(0 == index)
-                {
-                    // DEBUG_V("Deleting config file.");
-                    FileMgr.DeleteFlashFile(filename);
-                }
-
                 if(FileMgr.SaveFlashFile(filename + ".tmp", index, data, len, final))
                 {
                     // DEBUG_V("Save Chunk - Success");
@@ -519,9 +528,6 @@ void c_WebMgr::init ()
                     logcon(String(F("Upload failed for: ")) + filename);
                     // remove the incomplete file
                     FileMgr.DeleteFlashFile(filename + ".tmp");
-                    // This will cause the defaults to be recreated.
-                    RequestReadConfigFile(filename);
-
                     // DEBUG_V("Save Chunk - Failed");
                     request->send (404, CN_applicationSLASHjson, F("{\"status\":\"Could not save data\"}"));
                 }
@@ -529,6 +535,7 @@ void c_WebMgr::init ()
 
             [this](AsyncWebServerRequest *request, uint8_t *data, uint32_t len, uint32_t index, uint32_t total)
             {
+                if (request->getResponse()) { return; }
                 // DEBUG_V("Save Data Chunk - Start");
                 String UploadFileName = request->url().substring(5);
                 DelayReboot(10000);
@@ -541,12 +548,6 @@ void c_WebMgr::init ()
                 // DEBUG_V(String(" file: ") + UploadFileName);
                 // DEBUG_V(String("final: ") + String(total <= (index+len)));
 
-                if(0 == index)
-                {
-                    // DEBUG_V("Deleting config file.");
-                    FileMgr.DeleteFlashFile(UploadFileName);
-                }
-
             	if(FileMgr.SaveFlashFile(UploadFileName + ".tmp", index, data, len, total <= (index+len)))
                 {
                     // DEBUG_V("Save Chunk - Success");
@@ -554,11 +555,8 @@ void c_WebMgr::init ()
                 else
                 {
                     // remove the incomplete file
-                    FileMgr.DeleteFlashFile(String("/") + UploadFileName + ".tmp");
+                    FileMgr.DeleteFlashFile(UploadFileName + ".tmp");
                     logcon(String(F("Upload failed for: ")) + UploadFileName);
-                    // This will cause the defaults to be recreated.
-                    RequestReadConfigFile(UploadFileName);
-
                     // DEBUG_V("Save Chunk - Failed");
                     request->send (404, CN_applicationSLASHjson, F("{\"status\":\"Could not save data\"}"));
                 }

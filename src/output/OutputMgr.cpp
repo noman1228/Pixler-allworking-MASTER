@@ -1103,11 +1103,16 @@ void c_OutputMgr::LoadConfig ()
         OUTPUT_DATA_GUARD;
         // Keep physical addressing stable for a test and drain earlier writes.
         if (TestMode.active || ConfigInProgress) { return; }
+        ConfigReload.TakeIfDue(millis(), LOAD_CONFIG_DELAY * 1000u);
         ConfigInProgress = true;
+        // Transmitters do not use ConfigInProgress. Stop them before changing
+        // pin, timing, pixel-count, or gamma state in the existing drivers.
+        for (auto& output : OutputChannelDrivers)
+        {
+            if (output.OutputDriverInUse) { ((c_OutputCommon*)output.OutputDriver)->PauseOutput(true); }
+        }
     }
     // DEBUG_START;
-
-    ConfigLoadNeeded = NO_CONFIG_NEEDED;
 
     // try to load and process the config file
     if (!FileMgr.LoadFlashFile(ConfigFileName, [this](JsonDocument &JsonConfigDoc)
@@ -1447,12 +1452,9 @@ void c_OutputMgr::Poll()
 #endif // def LED_FLASH_GPIO
 
     // do we need to save the current config?
-    if (NO_CONFIG_NEEDED != ConfigLoadNeeded)
+    if (ConfigReload.IsDue(millis(), LOAD_CONFIG_DELAY * 1000u))
     {
-        if(abs(now() - ConfigLoadNeeded) > LOAD_CONFIG_DELAY)
-        {
-            LoadConfig ();
-        }
+        LoadConfig ();
     } // done need to save the current config
 
     OUTPUT_DATA_GUARD;
@@ -1843,6 +1845,14 @@ bool c_OutputMgr::SetTestMode(const JsonObject& request, String& error)
         return false;
     }
 
+    if (TestMode.active && candidate.pattern == TestMode.pattern &&
+        candidate.output == TestMode.output && candidate.pixel == TestMode.pixel &&
+        candidate.brightness == TestMode.brightness && candidate.interval == TestMode.interval &&
+        candidate.segment == TestMode.segment)
+    {
+        return true;
+    }
+
     TestMode = candidate;
     TestStartedAt = millis();
     LastTestStep = uint32_t(-1);
@@ -1904,6 +1914,7 @@ void c_OutputMgr::ServiceTestMode()
     bool active;
     {
         OUTPUT_DATA_GUARD;
+        if (ConfigReloadStopRequested.exchange(false, std::memory_order_acq_rel)) { StopTestMode(); }
         if (RebootInProgress()) { StopTestMode(false); }
         active = TestMode.active;
     }
@@ -1917,10 +1928,12 @@ void c_OutputMgr::ServiceTestMode()
 void c_OutputMgr::RenderTestMode()
 {
     if (!TestMode.active) { return; }
-    const uint32_t step = uint32_t(millis() - TestStartedAt) / TestMode.interval;
+    const bool animated = TestMode.pattern == TestModePatterns::Pattern::Rgb ||
+        TestMode.pattern == TestModePatterns::Pattern::Chase ||
+        TestMode.pattern == TestModePatterns::Pattern::Pixel;
+    const uint32_t step = animated ? uint32_t(millis() - TestStartedAt) / TestMode.interval : 0;
     if (step == LastTestStep) { return; }
     LastTestStep = step;
-    memset(OutputBuffer, 0, sizeof(OutputBuffer));
     for (auto& output : OutputChannelDrivers)
     {
         if (!output.OutputDriverInUse || (TestMode.output != -1 && TestMode.output != int32_t(output.DriverId))) { continue; }
