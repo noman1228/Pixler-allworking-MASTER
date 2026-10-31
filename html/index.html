@@ -1010,6 +1010,7 @@
                                 <option value="rgb">Red / Green / Blue Cycle</option>
                                 <option value="chase">Chasing White Segment</option>
                                 <option value="pixel">Blink One White LED</option>
+                                <option value="count">Count LEDs</option>
                             </select>
                         </div>
                     </div>
@@ -1025,6 +1026,23 @@
                         <div class="col-sm-3">
                             <input id="testmode-pixel" type="number" class="form-control" min="1" max="1" step="1" value="1" required disabled>
                             <p id="testmode-pixel-help" class="help-block">LED 1 is the first configured pixel on this output.</p>
+                        </div>
+                    </div>
+                    <div id="testmode-count-position-group" class="form-group hidden">
+                        <label for="testmode-count-position" class="control-label col-sm-2">LED Position</label>
+                        <div class="col-sm-8">
+                            <div class="testmode-slider-value">First LED: <output id="testmode-count-position-value" for="testmode-count-position">1</output></div>
+                            <input id="testmode-count-position" type="range" min="1" max="1" step="1" value="1" disabled>
+                            <p id="testmode-count-range" class="testmode-count-range" role="status" aria-live="polite">Choose one pixel output.</p>
+                            <p class="help-block">Start the test, then drag either slider to move the white LEDs. Position is the first lit LED; the group shrinks near the last LED.</p>
+                        </div>
+                    </div>
+                    <div id="testmode-count-size-group" class="form-group hidden">
+                        <label for="testmode-count-size" class="control-label col-sm-2">White LEDs</label>
+                        <div class="col-sm-8">
+                            <div class="testmode-slider-value">Group size: <output id="testmode-count-size-value" for="testmode-count-size">1</output></div>
+                            <input id="testmode-count-size" type="range" min="1" max="5" step="1" value="1" disabled>
+                            <p class="help-block">1–5 LEDs. All other LEDs stay off.</p>
                         </div>
                     </div>
                     <div class="form-group">

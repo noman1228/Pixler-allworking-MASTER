@@ -5,7 +5,7 @@
 // Shared by the runtime renderer and the host regression tests.
 namespace TestModePatterns
 {
-    enum class Pattern { Red, Green, Blue, White, Rgb, Chase, Pixel };
+    enum class Pattern { Red, Green, Blue, White, Rgb, Chase, Pixel, Count };
     struct Color { uint8_t red; uint8_t green; uint8_t blue; };
 
     inline Color PixelColor(Pattern pattern, uint32_t step, uint32_t pixelIndex,
@@ -35,6 +35,14 @@ namespace TestModePatterns
             }
             case Pattern::Pixel:
                 return pixelIndex == selectedPixel && !(step & 1) ? Color{brightness, brightness, brightness} : Color{0, 0, 0};
+            case Pattern::Count:
+            {
+                // The selected LED starts the marker. It shrinks at the end
+                // without wrapping or moving until another LED is selected.
+                const uint32_t length = segment < 5 ? segment : 5;
+                return pixelIndex >= selectedPixel && pixelIndex - selectedPixel < length
+                    ? Color{brightness, brightness, brightness} : Color{0, 0, 0};
+            }
         }
         return {0, 0, 0};
     }

@@ -93,6 +93,31 @@
     color: var(--muted);
 }
 
+.testmode-slider-value {
+    margin: 6px 0 10px;
+}
+
+.testmode-slider-value output {
+    display: inline;
+    padding: 0;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+#testmode input[type="range"] {
+    width: 100%;
+    min-height: 36px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.testmode-count-range {
+    margin-top: 10px;
+    color: var(--accent);
+    font-size: 18px;
+    font-variant-numeric: tabular-nums;
+}
+
 body {
   padding-top: 60px;
   padding-bottom: 20px;

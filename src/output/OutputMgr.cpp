@@ -84,6 +84,7 @@ namespace
             case TestModePatterns::Pattern::Rgb: return "rgb";
             case TestModePatterns::Pattern::Chase: return "chase";
             case TestModePatterns::Pattern::Pixel: return "pixel";
+            case TestModePatterns::Pattern::Count: return "count";
         }
         return "red";
     }
@@ -1789,7 +1790,7 @@ bool c_OutputMgr::SetTestMode(const JsonObject& request, String& error)
         for (auto pattern : {TestModePatterns::Pattern::Red, TestModePatterns::Pattern::Green,
                              TestModePatterns::Pattern::Blue, TestModePatterns::Pattern::White,
                              TestModePatterns::Pattern::Rgb, TestModePatterns::Pattern::Chase,
-                             TestModePatterns::Pattern::Pixel})
+                             TestModePatterns::Pattern::Pixel, TestModePatterns::Pattern::Count})
         {
             if (name == TestPatternName(pattern)) { candidate.pattern = pattern; found = true; break; }
         }
@@ -1830,10 +1831,15 @@ bool c_OutputMgr::SetTestMode(const JsonObject& request, String& error)
         if (candidate.output == -1 || candidate.output == int32_t(output.DriverId)) { pixelCount += count; }
     }
     if (!pixelCount) { error = F("Select a configured pixel output"); return false; }
-    if (candidate.pattern == TestModePatterns::Pattern::Pixel &&
+    if ((candidate.pattern == TestModePatterns::Pattern::Pixel || candidate.pattern == TestModePatterns::Pattern::Count) &&
         (candidate.output == -1 || candidate.pixel > pixelCount))
     {
         error = F("Choose one output and an LED within its configured pixel count");
+        return false;
+    }
+    if (candidate.pattern == TestModePatterns::Pattern::Count && candidate.segment > 5)
+    {
+        error = F("Choose a group size from 1 to 5 LEDs");
         return false;
     }
 

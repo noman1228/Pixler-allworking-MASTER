@@ -13,6 +13,7 @@ tests
 !tests/
 tests/*
 !tests/unzip/
+!tests/testmode/
 
 dist
 data

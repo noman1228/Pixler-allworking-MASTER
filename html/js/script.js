@@ -2963,13 +2963,18 @@ const TestModeUI = (function () {
     let busy = false;
     let commandBusy = false;
     let stopQueued = false;
+    let countLiveRequested = false;
+    let pendingCount = null;
+    let stopping = false;
+    let countInFlight = '';
+    let confirmedCount = '';
     let dirty = false;
     let draftRevision = 0;
     let outputsKey = '';
     let lastPoll = 0;
     const labels = {
         red: 'Solid Red', green: 'Solid Green', blue: 'Solid Blue', white: 'Solid White',
-        rgb: 'Red / Green / Blue Cycle', chase: 'Chasing White Segment', pixel: 'Blink One White LED'
+        rgb: 'Red / Green / Blue Cycle', chase: 'Chasing White Segment', pixel: 'Blink One White LED', count: 'Count LEDs'
     };
 
     function configuredOutputs() {
@@ -2988,12 +2993,23 @@ const TestModeUI = (function () {
     function updateFields() {
         const pattern = $('#testmode-pattern').val();
         const pixel = pattern === 'pixel';
+        const count = pattern === 'count';
         const animated = pixel || pattern === 'chase' || pattern === 'rgb';
         const output = selectedOutput();
         $('#testmode-pattern, #testmode-output, #testmode-brightness').prop('disabled', commandBusy);
         $('#testmode-pixel-group').toggleClass('hidden', !pixel);
         $('#testmode-pixel').prop('disabled', !pixel || commandBusy).attr('max', output ? output.pixels : 1);
         $('#testmode-pixel-help').text(output ? 'Choose LED 1 through ' + output.pixels + ' on this output.' : 'Choose one output to locate an LED.');
+        $('#testmode-count-position-group, #testmode-count-size-group').toggleClass('hidden', !count);
+        const lastPixel = output ? output.pixels : 1;
+        const position = Math.max(1, Math.min(lastPixel, Number($('#testmode-count-position').val()) || 1));
+        const size = Math.max(1, Math.min(5, Number($('#testmode-count-size').val()) || 1));
+        $('#testmode-count-position').attr('max', lastPixel).val(position).prop('disabled', !count || !connected || !output);
+        $('#testmode-count-size').val(size).prop('disabled', !count || !connected || !output);
+        $('#testmode-count-position-value').text(position);
+        $('#testmode-count-size-value').text(size);
+        const end = Math.min(lastPixel, position + size - 1);
+        $('#testmode-count-range').text(output ? 'LEDs ' + position + '–' + end + ' of ' + lastPixel + ' · ' + (end - position + 1) + ' lit' : 'Choose one pixel output.');
         $('#testmode-interval-group').toggleClass('hidden', !animated);
         $('#testmode-interval').prop('disabled', !animated || commandBusy);
         $('#testmode-segment-group').toggleClass('hidden', pattern !== 'chase');
@@ -3027,6 +3043,7 @@ const TestModeUI = (function () {
             if (select.val() === null) select.val(-1);
             outputsKey = key;
         }
+        const output = data.outputs.find(item => item.id === data.output);
         if (syncFields || !dirty) {
             $('#testmode-pattern').val(data.pattern);
             $('#testmode-output').val(data.output);
@@ -3034,11 +3051,16 @@ const TestModeUI = (function () {
             $('#testmode-brightness').val(data.brightness);
             $('#testmode-interval').val(data.interval);
             $('#testmode-segment').val(data.segment);
+            $('#testmode-count-position').attr('max', output ? output.pixels : 1).val(data.pixel);
+            $('#testmode-count-size').val(data.pattern === 'count' ? data.segment : 1);
         }
-        const output = data.outputs.find(item => item.id === data.output);
+        if (!data.active || data.pattern !== 'count') countLiveRequested = false;
+        else if ((syncFields || !dirty) && !stopping) countLiveRequested = true;
+        confirmedCount = data.active && data.pattern === 'count' ? countKey(data) : '';
         const target = data.output === -1 ? 'all pixel outputs' : 'output ' + (data.output + 1);
         const detail = (labels[data.pattern] || data.pattern) + ' · ' + target +
-            (data.pattern === 'pixel' ? ' · LED ' + data.pixel : '');
+            (data.pattern === 'pixel' ? ' · LED ' + data.pixel :
+                data.pattern === 'count' && output ? ' · LEDs ' + data.pixel + '–' + Math.min(output.pixels, data.pixel + data.segment - 1) : '');
         $('#testmode-banner').toggleClass('hidden', !data.active);
         $('#testmode-banner-detail').text(detail + '. Normal traffic is paused.');
         $('#testmode-status').text(data.active ? 'Running: ' + detail + '.' : 'Stopped. Normal operation is enabled.');
@@ -3053,6 +3075,7 @@ const TestModeUI = (function () {
         if (busy) return;
         busy = true;
         commandBusy = method === 'POST';
+        countInFlight = commandBusy && data.active && data.pattern === 'count' ? countKey(data) : '';
         const submittedRevision = draftRevision;
         lastPoll = Date.now();
         if (commandBusy) {
@@ -3069,11 +3092,15 @@ const TestModeUI = (function () {
                 if (applied) dirty = false;
             } catch (error) {
                 connected = false;
+                pendingCount = null;
+                countLiveRequested = false;
                 showError(error.message);
                 $('#testmode-status').text('Test status is unknown.');
             }
         }).fail(function (xhr, reason) {
             connected = false;
+            pendingCount = null;
+            countLiveRequested = false;
             const message = xhr.responseJSON && xhr.responseJSON.error;
             showError(message || (xhr.status === 404 ? 'Test Mode is unavailable. Update the controller firmware and web files together.' :
                 'Could not reach Test Mode (' + (reason === 'timeout' ? 'request timed out' : 'request failed') + '). Use Stop Test & Resume to retry stopping.'));
@@ -3084,10 +3111,15 @@ const TestModeUI = (function () {
         }).always(function () {
             busy = false;
             commandBusy = false;
+            countInFlight = '';
             updateFields();
             if (stopQueued) {
                 stopQueued = false;
                 request('POST', {active: false});
+            } else if (pendingCount) {
+                const next = pendingCount;
+                pendingCount = null;
+                if (connected && countLiveRequested && !stopping && countKey(next) !== confirmedCount) request('POST', next);
             }
         });
     }
@@ -3097,6 +3129,9 @@ const TestModeUI = (function () {
     }
 
     function stop() {
+        stopping = true;
+        countLiveRequested = false;
+        pendingCount = null;
         if (busy) {
             stopQueued = true;
             $('#testmode-status').text('Stop requested. Waiting for the current request to finish…');
@@ -3105,15 +3140,53 @@ const TestModeUI = (function () {
         request('POST', {active: false});
     }
 
+    function countCommand() {
+        return {
+            active: true, pattern: 'count', output: Number($('#testmode-output').val()),
+            pixel: Number($('#testmode-count-position').val()),
+            brightness: Number($('#testmode-brightness').val()), interval: 250,
+            segment: Number($('#testmode-count-size').val())
+        };
+    }
+
+    function countKey(command) {
+        return [command.output, command.pixel, command.segment, command.brightness].join(':');
+    }
+
+    function moveCount() {
+        if (!connected || !countLiveRequested || stopping || !selectedOutput() ||
+            $('#testmode-pattern').val() !== 'count') return;
+        if (!$('#testmode-form')[0].checkValidity()) {
+            pendingCount = null;
+            return;
+        }
+        // Keep only the newest slider position while a command or poll is pending.
+        pendingCount = countCommand();
+        if (countKey(pendingCount) === countInFlight || (!busy && countKey(pendingCount) === confirmedCount)) {
+            pendingCount = null;
+            return;
+        }
+        if (!busy) {
+            const next = pendingCount;
+            pendingCount = null;
+            request('POST', next);
+        }
+    }
+
     function initialize() {
         $('#testmode-form').on('input change', 'input, select', function () {
             dirty = true;
             draftRevision++;
-            if (this.id === 'testmode-pattern' && this.value === 'pixel' && !selectedOutput()) {
+            if (this.id === 'testmode-pattern' || this.id === 'testmode-output') {
+                countLiveRequested = false;
+                pendingCount = null;
+            }
+            if (this.id === 'testmode-pattern' && ['pixel', 'count'].includes(this.value) && !selectedOutput()) {
                 const first = configuredOutputs()[0];
                 if (first) $('#testmode-output').val(first.id);
             }
             updateFields();
+            if (this.id === 'testmode-count-position' || this.id === 'testmode-count-size') moveCount();
         });
         $('#testmode-form').on('submit', function (event) {
             event.preventDefault();
@@ -3121,12 +3194,15 @@ const TestModeUI = (function () {
             if (!this.reportValidity()) return;
             const pattern = $('#testmode-pattern').val();
             const output = Number($('#testmode-output').val());
-            if (pattern === 'pixel' && !selectedOutput()) {
-                showError('Choose one output for the blinking LED test.');
+            if (['pixel', 'count'].includes(pattern) && !selectedOutput()) {
+                showError('Choose one output for this LED test.');
                 $('#testmode-output').focus();
                 return;
             }
-            request('POST', {
+            stopping = false;
+            pendingCount = null;
+            countLiveRequested = pattern === 'count';
+            request('POST', pattern === 'count' ? countCommand() : {
                 active: true, pattern: pattern, output: output,
                 pixel: pattern === 'pixel' ? Number($('#testmode-pixel').val()) : 1,
                 brightness: Number($('#testmode-brightness').val()),
