@@ -63,6 +63,7 @@ public:
     void SetBufferInfo        (uint32_t BufferSize);
     void SetOperationalState  (bool Active);
     void SetTestModePaused    (bool Paused);
+    void SetFileExtractionPaused(bool Paused);
     void NetworkStateChanged  (bool IsConnected);
     void DeleteConfig         () { FileMgr.DeleteFlashFile (ConfigFileName); }
     bool GetNetworkState      () { return IsConnected; }
@@ -114,6 +115,7 @@ private:
     time_t          ConfigLoadNeeded    = NO_CONFIG_NEEDED;
     bool            PauseProcessing     = false;
     bool            TestModePaused      = false;
+    bool            FileExtractionPaused = false;
 #ifdef ARDUINO_ARCH_ESP32
     SemaphoreHandle_t InputStateMutex = nullptr;
 #endif

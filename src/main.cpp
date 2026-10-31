@@ -40,6 +40,9 @@
 
 // File System Interface
 #include "FileMgr.hpp"
+#ifdef SUPPORT_UNZIP
+#include "UnzipFiles.hpp"
+#endif
 
 // Services
 #include "service/FPPDiscovery.h"
@@ -560,6 +563,9 @@ void loop()
     // DEBUG_V();
     FeedWDT ();
     FileMgr.Poll ();
+#ifdef SUPPORT_UNZIP
+    gUnzipFiles.Poll();
+#endif
     // DEBUG_V();
     FeedWDT ();
     FPPDiscovery.Poll ();

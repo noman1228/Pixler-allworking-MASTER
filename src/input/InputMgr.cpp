@@ -665,7 +665,7 @@ void c_InputMgr::InstantiateNewInputChannel (e_InputChannelIds ChannelIndex, e_I
 void c_InputMgr::LoadConfig ()
 {
     INPUT_STATE_GUARD;
-    if (TestModePaused) { return; }
+    if (TestModePaused || FileExtractionPaused) { return; }
     // DEBUG_START;
 
     ConfigLoadNeeded = NO_CONFIG_NEEDED;
@@ -709,7 +709,7 @@ void c_InputMgr::Process ()
 
     do // once
     {
-        if (configInProgress || PauseProcessing || TestModePaused)
+        if (configInProgress || PauseProcessing || TestModePaused || FileExtractionPaused)
         {
             // prevent calls to process when we are doing a long operation
             break;
@@ -779,7 +779,7 @@ void c_InputMgr::Process ()
 void c_InputMgr::ProcessButtonActions (c_ExternalInput::InputValue_t value)
 {
     INPUT_STATE_GUARD;
-    if (PauseProcessing || TestModePaused) { return; }
+    if (PauseProcessing || TestModePaused || FileExtractionPaused) { return; }
     // DEBUG_START;
 
     for(auto & CurrentInput : InputChannelDrivers)
@@ -1083,9 +1083,40 @@ void c_InputMgr::SetTestModePaused(bool Paused)
     ApplyOperationalState();
 }
 
+// Extraction must release playback handles before replacing their SD files.
+// Keep this reason independent from uploads and test mode so either can resume
+// without reopening a sequence while extraction still owns the file system.
+void c_InputMgr::SetFileExtractionPaused(bool Paused)
+{
+    INPUT_STATE_GUARD;
+    if (FileExtractionPaused == Paused) { return; }
+    FileExtractionPaused = Paused;
+    ApplyOperationalState();
+#ifdef SUPPORT_FPP
+    if (Paused)
+    {
+        for (auto & CurrentInput : InputChannelDrivers)
+        {
+            if (!CurrentInput.DriverInUse) { continue; }
+            auto * Driver = reinterpret_cast<c_InputCommon *>(CurrentInput.InputDriver);
+            if (Driver->GetInputType() != e_InputType::InputType_FPP) { continue; }
+            auto * FilePlayer = static_cast<c_InputFPPRemote *>(Driver);
+            if (FilePlayer->pInputFPPRemotePlayItem)
+            {
+                // A paused player's Stop/Poll methods do nothing. Enable only
+                // the item for teardown, while its input driver remains inactive
+                // and the input-state guard prevents automatic playback restart.
+                FilePlayer->pInputFPPRemotePlayItem->SetOperationalState(true);
+            }
+            FilePlayer->StopPlaying();
+        }
+    }
+#endif
+}
+
 void c_InputMgr::ApplyOperationalState()
 {
-    const bool ActiveFlag = !PauseProcessing && !TestModePaused;
+    const bool ActiveFlag = !PauseProcessing && !TestModePaused && !FileExtractionPaused;
 
     // pass through each active interface and set the active state
     for (auto & CurrentInput : InputChannelDrivers)

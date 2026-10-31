@@ -31,6 +31,46 @@
     margin-right: 8px;
 }
 
+.unzip-status {
+    margin: 12px 0;
+    overflow-wrap: anywhere;
+    border-radius: var(--radius);
+}
+
+.unzip-status.alert-info {
+    color: #b9f3ff;
+    background: #132d3b;
+    border-color: #32798b;
+}
+
+.unzip-status.alert-warning {
+    color: #ffe3a5;
+    background: #352b16;
+    border-color: #a47c2b;
+}
+
+.unzip-status.alert-success {
+    color: #b4f8cd;
+    background: #173527;
+    border-color: #368259;
+}
+
+.unzip-status.alert-danger {
+    color: #ffc4c4;
+    background: #341e24;
+    border-color: var(--danger);
+}
+
+.unzip-status .progress {
+    margin: 10px 0 0;
+    background: #0a1520;
+}
+
+#unzipStatusConnection {
+    margin-top: 8px;
+    font-weight: 600;
+}
+
 .testmode-status {
     padding: 12px 0;
     color: var(--accent);

@@ -26,6 +26,7 @@
 #include "SdFat.h"
 #include <map>
 #include <vector>
+#include <atomic>
 
 #ifdef ARDUINO_ARCH_ESP32
 #   ifdef SIMULATE_SD
@@ -62,6 +63,7 @@ public:
 
     bool    handleFileUpload (const String & filename, size_t index, uint8_t * data, size_t len, bool final, uint32_t totalLen);
     void    AbortSdFileUpload();
+    bool    IsUploadInProgress() const;
 
     typedef std::function<void (JsonDocument& json)> DeserializationHandler;
 
@@ -109,6 +111,7 @@ public:
     uint64_t GetSdFileSize    (const String & FileName);
     uint64_t GetSdFileSize    (const FileId & FileHandle);
     void     RenameSdFile     (const String & OldName, const String & NewName);
+    bool     ReplaceSdFile    (const String & TempName, const String & TargetName);
     void     BuildFseqList    (bool DisplayFileNames);
 
     void     GetDriverName    (String& Name) { Name = F("FileMgr"); }
@@ -134,6 +137,7 @@ public:
 }
 
 private:
+    bool OpenNextSdEntry(FsFile & Entry, FsFile & Directory);
     void    SetSpiIoPins ();
     void    SetSdSpeed ();
     void    ResetSdCard ();
@@ -142,6 +146,7 @@ private:
     bool    SeekSdFile(const FileId & FileHandle, uint64_t position, SeekMode Mode);
     void    BuildDefaultFseqList ();
     bool    IsCompressed(String FileName);
+    bool    FlushSdFileBuffer(const FileId & FileHandle);
 
 #   define SD_CARD_CLK_MHZ     SD_SCK_MHZ(37)  // 50 MHz SPI clock
 #ifndef MaxSdTransSpeedMHz
@@ -159,8 +164,9 @@ private:
     uint8_t  mosi_pin = SD_CARD_MOSI_PIN;
     uint8_t  clk_pin  = SD_CARD_CLK_PIN;
     uint8_t  cs_pin   = SD_CARD_CS_PIN;
-    FileId   fsUploadFileHandle;
+    FileId   fsUploadFileHandle = INVALID_FILE_HANDLE;
     String   fsUploadFileName;
+    std::atomic<bool> fsUploadInProgress {false};
     bool     fsUploadFileSavedIsEnabled = false;
     uint32_t fsUploadStartTime;
     char     FtpUserName[65] = "esps";
@@ -248,7 +254,7 @@ public: struct __attribute__((__packed__, aligned(4))) CSD {
         FsFile      fsFile;
         uint64_t    size = 0;
         int         entryId = -1;
-        char        Filename[65];
+        String      Filename;
         FileMode    mode = FileMode::FileRead;
         bool        IsOpen = false;
         struct

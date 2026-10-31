@@ -24,6 +24,7 @@
 
 class c_InputFPPRemote : public c_InputCommon
 {
+    friend class c_InputMgr;
   public:
 
       c_InputFPPRemote (c_InputMgr::e_InputChannelIds NewInputChannelId,

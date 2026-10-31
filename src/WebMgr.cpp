@@ -19,6 +19,9 @@
 
 #include "WebMgr.hpp"
 #include "FileMgr.hpp"
+#ifdef SUPPORT_UNZIP
+#include "UnzipFiles.hpp"
+#endif
 
 #include "input/InputMgr.hpp"
 #include "service/FPPDiscovery.h"
@@ -664,6 +667,11 @@ void c_WebMgr::init ()
     	webServer.on ("/upload", HTTP_POST | HTTP_PUT | HTTP_OPTIONS,
         	[](AsyncWebServerRequest * request)
             {
+                if (request->getResponse())
+                {
+                    FPPDiscovery.FinishFileUpload(request);
+                    return;
+                }
                 if(HTTP_OPTIONS == request->method())
                 {
                     request->send (200);
@@ -681,6 +689,7 @@ void c_WebMgr::init ()
                         request->send (404, CN_applicationSLASHjson, F("{\"status\":\"Page Not found\"}"));
                     }
                 }
+                FPPDiscovery.FinishFileUpload(request);
             },
 
         	[this](AsyncWebServerRequest* request, String filename, uint32_t index, uint8_t* data, uint32_t len, bool final)
@@ -834,6 +843,9 @@ void c_WebMgr::ProcessXJRequest (AsyncWebServerRequest* client)
     // Get File Manager Stats
     // DEBUG_V ("FileMgr.GetStatus");
     FileMgr.GetStatus (system);
+#ifdef SUPPORT_UNZIP
+    gUnzipFiles.GetStatus(system);
+#endif
     // DEBUG_V ("");
 
     // DEBUG_V("Send XJ response");

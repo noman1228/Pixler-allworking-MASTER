@@ -1,4 +1,7 @@
 var StatusRequestTimer = null;
+var StatusRequestInProgress = false;
+var UnzipStatusState = 'idle';
+var LastUnzipCompletionKey = '';
 var DiagTimer = null;
 var MonitorTransactionRequestInProgressId = 0;
 var PreviousMonitorTransactionRequestInProgressId = 0;
@@ -470,25 +473,13 @@ $(function ()
                     // console.log("File: " + file.name);
                     Dropzone.forElement('#filemanagementupload').removeAllFiles(true)
                     RequestListOfFiles();
+                    RequestStatusUpdate();
                 });
 
-                this.on('complete', function (file) {
+                this.on('complete', function () {
                     // console.log("complete");
                     // console.log("File: " + file.name);
                     $('#fseqprogress_fg').addClass("hidden");
-                    let extensionPosition = file.name.lastIndexOf(".");
-                    if(extensionPosition !== -1)
-                    {
-                        let extension = file.name.toLowerCase().slice(extensionPosition + 1);
-                        if(("zip" === extension) || ("xlz" === extension))
-                        {
-                            let RebootNow = confirm("Downloaded a zip file. Unzip requires a reboot.\nClick 'OK' to Reboot NOW.");
-                            if(RebootNow)
-                            {
-                                reboot();
-                            }
-                        }
-                    }
                     // let DeltaTime = (new Date().getTime() - FseqFileTransferStartTime.getTime()) / 1000;
                     // let rate = Math.floor((file.size / DeltaTime) / 1000);
                     // console.debug("Final Transfer Rate: " + rate + "KBps");
@@ -581,6 +572,7 @@ $(function ()
         } else {
             DocumentIsHidden = false;
             SetServerTime();
+            RequestStatusUpdate();
         }
     });
 
@@ -970,11 +962,12 @@ async function StartRequestingStatusUpdate()
 
 function RequestStatusUpdate()
 {
-    if ($('#home').is(':visible'))
+    // The extraction banner is shared by every tab. Keep one status request queued.
+    if (!DocumentIsHidden && !document.hidden && !StatusRequestInProgress)
     {
+        StatusRequestInProgress = true;
         // ask for a status update from the server
         let FileName = "XJ";
-        console.log("RequestStatusUpdate FileName: " + FileName);
 
         MonitorTransactionRequestInProgressId++;
 
@@ -985,7 +978,7 @@ function RequestStatusUpdate()
             mode: "cors", // no-cors, *cors, same-origin
             dataType: "json",
             timeout: 20000,
-            async: false,
+            async: true,
             headers: { 'Content-Type': 'application/json' },
             cache: "reload", // *default, no-cache, reload, force-cache, only-if-cached
             credentials: "same-origin", // include, *same-origin, omit
@@ -993,7 +986,6 @@ function RequestStatusUpdate()
             referrerPolicy: "no-referrer", // no-referrer, *no-referrer-when-downgrade, origin, origin-when-cross-origin, same-origin, strict-origin, strict-origin-when-cross-origin, unsafe-url
             success: function(response)
             {
-                console.log("RequestStatusUpdate: " + JSON.stringify(response));
                 FailedToCompleteServerTransaction = 0;
                 ProcessReceivedJsonStatusMessage(response);
             },
@@ -1002,9 +994,16 @@ function RequestStatusUpdate()
                 FailedToCompleteServerTransaction ++;
                 console.error("Could not read Status file: " + FileName);
                 console.error("Error:", textStatus);
+                if (UnzipStatusState === 'waiting' || UnzipStatusState === 'extracting') {
+                    $('#unzipStatusConnection').text('Status update unavailable. Reconnecting…').removeClass('hidden');
+                }
+            },
+            complete: function()
+            {
+                StatusRequestInProgress = false;
             }
         });
-    } // end home (aka status) is visible
+    }
 
 } // RequestStatusUpdate
 
@@ -2476,6 +2475,62 @@ function ProcessReceivedJsonAdminMessage(data)
 
 } // ProcessReceivedJsonAdminMessage
 
+function ProcessUnzipStatus(Unzip, networkConnected) {
+    const state = Unzip && Unzip.state || 'idle';
+    const indicator = $('#unzipStatusIndicator');
+    UnzipStatusState = state;
+    $('#unzipStatusConnection').addClass('hidden').text('');
+    indicator.removeClass('alert-info alert-warning alert-success alert-danger')
+        .toggleClass('hidden', !['waiting', 'extracting', 'complete', 'error'].includes(state));
+    const extracting = state === 'extracting';
+    $('#unzipStatusProgress').toggleClass('hidden', !extracting);
+    if (!Unzip || state === 'idle') {
+        LastUnzipCompletionKey = '';
+        return;
+    }
+
+    const archive = Unzip.fileName || 'archive';
+    const written = Math.max(0, Number(Unzip.bytesWritten) || 0);
+    const total = Math.max(0, Number(Unzip.totalBytes) || 0);
+    const percent = total ? Math.min(100, Math.floor(written * 100 / total)) : 0;
+    const files = Math.max(0, Number(Unzip.filesExtracted) || 0);
+    let title = '';
+    let detail = '';
+    let style = 'alert-info';
+    if (state === 'waiting') {
+        title = 'Extraction queued: ' + archive;
+        detail = networkConnected ? 'Waiting to begin extraction after file transfers finish.' : 'Waiting for a network connection…';
+    } else if (extracting) {
+        title = 'Extracting: ' + archive;
+        detail = (Unzip.entryName || 'Opening archive…') +
+            (total ? ' — ' + percent + '% (' + written.toLocaleString() + ' / ' + total.toLocaleString() + ' bytes)' : '') +
+            (files ? ' · ' + files + ' file' + (files === 1 ? '' : 's') + ' extracted' : '');
+        style = 'alert-warning';
+    } else if (state === 'complete') {
+        title = 'Extraction complete: ' + archive;
+        detail = files + ' file' + (files === 1 ? '' : 's') + ' ready.';
+        style = 'alert-success';
+    } else if (state === 'error') {
+        title = Number(Unzip.archivesFailed) > 0 ? 'Extraction needs attention' : 'Extraction failed: ' + archive;
+        detail = Unzip.error || 'The archive could not be extracted. Check the archive and available SD card space.';
+        style = 'alert-danger';
+    }
+    indicator.addClass(style);
+    $('#unzipStatusTitle').text(title);
+    $('#unzipStatusDetail').text(detail);
+    $('#unzipStatusProgressBar').css('width', percent + '%').attr('aria-valuenow', percent).text(percent + '%');
+
+    if (state === 'complete' || state === 'error') {
+        const key = JSON.stringify([Unzip.jobId, state, archive, files, written]);
+        if (key !== LastUnzipCompletionKey) {
+            LastUnzipCompletionKey = key;
+            RequestListOfFiles();
+        }
+    } else {
+        LastUnzipCompletionKey = '';
+    }
+} // ProcessUnzipStatus
+
 function ProcessReceivedJsonStatusMessage(JsonStat) {
     // let JsonStat = JSON.parse(data);
     let Status = JsonStat.status;
@@ -2483,6 +2538,7 @@ function ProcessReceivedJsonStatusMessage(JsonStat) {
     let Network = System.network;
     let Wifi = Network.wifi;
     let Ethernet = Network.eth || null;
+    ProcessUnzipStatus(System.unzip, Boolean(Wifi && Wifi.connected || Ethernet && Ethernet.connected));
 
     // --- Network Status Indicator Logic ---
     let indicator = $('#networkStatusIndicator');

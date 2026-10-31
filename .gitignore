@@ -10,5 +10,11 @@ node_modules
 .build_stamp*
 tools
 tests
+!tests/
+tests/*
+!tests/unzip/
+
 dist
 data
+firmware/
+debug/

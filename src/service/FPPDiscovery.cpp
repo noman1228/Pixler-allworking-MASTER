@@ -22,6 +22,7 @@
 #include "FileMgr.hpp"
 #include "output/OutputMgr.hpp"
 #include "network/NetworkMgr.hpp"
+#include "UnzipFiles.hpp"
 #include <Int64String.h>
 #include <time.h>
 
@@ -76,7 +77,7 @@ c_FPPDiscovery::c_FPPDiscovery ()
     // DEBUG_START;
     memset ((void*)&MultiSyncStats, 0x00, sizeof (MultiSyncStats));
     memset (ConfiguredFileToPlay, 0x00, sizeof (ConfiguredFileToPlay));
-    memset (UploadFileName, 0x00, sizeof (UploadFileName));
+    UploadFileName.reserve(256);
 
     // DEBUG_END;
 } // c_FPPDiscovery
@@ -614,7 +615,7 @@ void c_FPPDiscovery::sendPingPacket (IPAddress destination)
 
     packet.operatingMode = (FileMgr.SdCardIsInstalled ()) ? 0x08 : 0x01; // Support remote mode : Bridge Mode
 
-    uint32_t ip = static_cast<uint32_t>(WiFi.localIP ());
+    uint32_t ip = static_cast<uint32_t>(NetworkMgr.GetlocalIP ());
     memcpy (packet.ipAddress, &ip, 4);
     String Hostname;
     NetworkMgr.GetHostname (Hostname);
@@ -842,6 +843,15 @@ void c_FPPDiscovery::ProcessGET (AsyncWebServerRequest* request)
             {
                 // DEBUG_V ("/meta");
                 seq = seq.substring (0, seq.length () - 5);
+                String extension = seq;
+                extension.toLowerCase();
+                if (extension.endsWith(".xlz") || extension.endsWith(".zip"))
+                {
+                    // An uploaded archive is not an FSEQ header. Its sequence
+                    // metadata is available under the extracted file's name.
+                    request->send(404);
+                    break;
+                }
                 // DEBUG_V("Stop Input");
                 StopPlaying ();
 
@@ -910,6 +920,11 @@ void c_FPPDiscovery::ProcessGET (AsyncWebServerRequest* request)
 //-----------------------------------------------------------------------------
 void c_FPPDiscovery::ProcessPOST (AsyncWebServerRequest* request)
 {
+    if (request->getResponse() != nullptr)
+    {
+        FinishFileUpload(request);
+        return;
+    }
     // DEBUG_START;
 
     FPPSemaphore.Take();
@@ -918,6 +933,11 @@ void c_FPPDiscovery::ProcessPOST (AsyncWebServerRequest* request)
 
     do // once
     {
+        if (!request->hasParam(ulrPath) || !request->hasParam(CN_filename))
+        {
+            request->send(404);
+            break;
+        }
         String path = request->getParam (ulrPath)->value ();
         // DEBUG_V (String(F ("path: ")) + path);
 
@@ -942,7 +962,23 @@ void c_FPPDiscovery::ProcessPOST (AsyncWebServerRequest* request)
         // DEBUG_V ("BuildFseqResponse");
         String resp = emptyString;
         // DEBUG_FILE_HANDLE(FileHandle);
-        BuildFseqResponse (filename, FileHandle, resp);
+        String extension = filename;
+        extension.toLowerCase();
+        if (extension.endsWith(".xlz") || extension.endsWith(".zip"))
+        {
+            // ZIP bytes are not an FSEQ header. Acknowledge the stored archive;
+            // its individual sequence metadata becomes available after extraction.
+            JsonDocument result;
+            JsonObject response = result.to<JsonObject>();
+            JsonWrite(response, F("Name"), filename);
+            JsonWrite(response, F("status"), F("OK"));
+            JsonWrite(response, F("extraction"), F("pending"));
+            serializeJson(result, resp);
+        }
+        else
+        {
+            BuildFseqResponse(filename, FileHandle, resp);
+        }
         // DEBUG_FILE_HANDLE (FileHandle);
         FileMgr.CloseSdFile (FileHandle);
         request->send (200, CN_applicationSLASHjson, resp);
@@ -950,6 +986,7 @@ void c_FPPDiscovery::ProcessPOST (AsyncWebServerRequest* request)
     } while (false);
 
     FPPSemaphore.Give();
+    FinishFileUpload(request);
 
     // DEBUG_END;
 } // ProcessPOST
@@ -964,94 +1001,136 @@ void c_FPPDiscovery::ProcessFile (
     bool final,
     uint32_t ContentLength)
 {
-    // DEBUG_START;
-
-    printReq(request, false);
-
-    do // once
+    if (request->getResponse() != nullptr)
     {
-        if (false == FileMgr.SdCardIsInstalled())
+        return;
+    }
+    if (!FileMgr.SdCardIsInstalled())
+    {
+        request->send(404);
+        return;
+    }
+    String normalizedName = filename;
+    normalizedName.toLowerCase();
+    bool validName = !filename.isEmpty() && filename.length() <= 255 &&
+        !filename.startsWith(" ") && !filename.endsWith(" ") && !filename.endsWith(".") &&
+        filename != "." && filename != ".." && filename.indexOf('/') < 0 &&
+        filename.indexOf('\\') < 0 && filename.indexOf(':') < 0 &&
+        normalizedName != ".unzip.tmp" && !normalizedName.endsWith(".unzip.bak");
+    for (size_t position = 0; validName && position < filename.length(); ++position)
+    {
+        validName = uint8_t(filename[position]) >= 32 && uint8_t(filename[position]) != 127;
+    }
+    if (!validName)
+    {
+        request->send(400, CN_applicationSLASHjson, F("{\"status\":\"Invalid upload filename\"}"));
+        return;
+    }
+#ifdef SUPPORT_UNZIP
+    if (inFileUpload && gUnzipFiles.IsFileInUse(filename))
+    {
+        request->send(409, CN_applicationSLASHjson, F("{\"status\":\"File is being extracted\"}"));
+        return;
+    }
+#endif
+    if (inFileUpload && uploadRequest != request)
+    {
+        request->send(409, CN_applicationSLASHjson, F("{\"status\":\"Another upload is in progress\"}"));
+        return;
+    }
+    if (!inFileUpload)
+    {
+        if (index != 0)
         {
-            request->send (404);
-            break;
+            request->send(500);
+            return;
         }
-
-        uint32_t ContentLength = 0;
-        if(request->hasHeader(F("Content-Length")))
+        // Reserve the upload while holding the extraction mutex. This closes
+        // the gap between checking the filename and marking the first chunk.
+#ifdef SUPPORT_UNZIP
+        if (!gUnzipFiles.TryBeginUpload(filename, inFileUpload))
         {
-            ContentLength = atoi (request->getHeader(F("Content-Length"))->value().c_str());
+            request->send(409, CN_applicationSLASHjson, F("{\"status\":\"File is being extracted\"}"));
+            return;
         }
-
-        // DEBUG_V (String ("         name: ") + filename);
-        // DEBUG_V (String ("        index: ") + String (index));
-        // DEBUG_V (String ("          len: ") + String (len));
-        // DEBUG_V (String ("        final: ") + String (final));
-        // DEBUG_V (String ("ContentLength: ") + String (ContentLength));
-
-        if(!inFileUpload)
+#else
+        inFileUpload = true;
+#endif
+        uploadRequest = request;
+        UploadFileName = filename;
+        StopPlaying();
+        InputMgr.SetOperationalState(false);
+        OutputMgr.PauseOutputs(true);
+        request->onDisconnect([this, request]()
         {
-            if(0 != index)
+            if (inFileUpload && uploadRequest == request)
             {
-                // DEBUG_V("Ignore non start file request. Index = " + String(index) + " Filename: '" + filename + "'");
-                request->send (500);
-                break;
+                FileMgr.AbortSdFileUpload();
+                UploadFileName.clear();
+                uploadRequest = nullptr;
+                OutputMgr.ClearBuffer();
+                InputMgr.SetOperationalState(true);
+                OutputMgr.PauseOutputs(false);
+                inFileUpload = false;
             }
-            // DEBUG_V (String ("         name: ") + filename);
-            // DEBUG_V(String("Current CPU ID: ") + String(xPortGetCoreID()));
-            // DEBUG_V("wait for the player to become idle");
-            // DEBUG_V (String ("ContentLength: ") + String (ContentLength));
-            // DEBUG_V("Stop Input");
-            StopPlaying();
-            inFileUpload = true;
-            strcpy(UploadFileName, filename.c_str());
-            InputMgr.SetOperationalState(false);
-            OutputMgr.PauseOutputs(true);
-        }
-        else if(!String(UploadFileName).equals(filename))
+        });
+    }
+    else if (!UploadFileName.equals(filename))
+    {
+        if (index != 0)
         {
-            if(0 != index)
-            {
-                // DEBUG_V("Ignore unexpected file fragment for '" + filename + "'");
-                request->send (500);
-                break;
-            }
-
-            // DEBUG_V("New file starting. Aborting: '" + String(UploadFileName) + "' and starting '" + filename + "'");
-            FileMgr.AbortSdFileUpload();
-            strcpy(UploadFileName, filename.c_str());
+            request->send(500);
+            return;
         }
+        FileMgr.AbortSdFileUpload();
+        UploadFileName = filename;
+    }
 
-        // DEBUG_V("Write the file block");
-        writeFailed = !FileMgr.handleFileUpload (UploadFileName, index, data, len, final, ContentLength);
-
-        if(writeFailed)
+    // The caller supplies a raw payload length when available. Multipart body
+    // Content-Length includes boundaries and must not replace this value.
+    writeFailed = !FileMgr.handleFileUpload(UploadFileName, index, data, len, final, ContentLength);
+    if (writeFailed)
+    {
+        request->send(500);
+    }
+    if (final || writeFailed)
+    {
+        const bool success = !writeFailed;
+        UploadFileName.clear();
+        writeFailed = false;
+        FeedWDT();
+        if (!success)
         {
-            // DEBUG_V("WriteFailed");
-            request->send (500);
-        }
-
-        // DEBUG_V();
-        if (final || writeFailed)
-        {
-            inFileUpload = false;
-            memset(UploadFileName, 0x0, sizeof(UploadFileName));
-            writeFailed = false;
             OutputMgr.ClearBuffer();
             InputMgr.SetOperationalState(true);
             OutputMgr.PauseOutputs(false);
-            FeedWDT();
-            delay(1000);
-            FeedWDT();
-            // DEBUG_V("Allow file to play");
-            String temp = String(UploadFileName);
-            StartPlaying(temp, 0.0);
+            uploadRequest = nullptr;
+            inFileUpload = false;
         }
-
-    } while (false);
-
-    // DEBUG_END;
-
+        // Hold successful requests and playback through completion: another
+        // multipart file may reuse the buffer, and extraction must wait until
+        // /fpp has built its response before it can remove the archive.
+    }
 } // ProcessFile
+
+void c_FPPDiscovery::FinishFileUpload(AsyncWebServerRequest* request)
+{
+    if (uploadRequest != request)
+    {
+        return;
+    }
+    if (!UploadFileName.isEmpty())
+    {
+        // An incomplete multipart request must not leave a partial archive.
+        FileMgr.AbortSdFileUpload();
+        UploadFileName.clear();
+    }
+    OutputMgr.ClearBuffer();
+    InputMgr.SetOperationalState(true);
+    OutputMgr.PauseOutputs(false);
+    uploadRequest = nullptr;
+    inFileUpload = false;
+}
 
 //-----------------------------------------------------------------------------
 void c_FPPDiscovery::ProcessBody (
@@ -1061,54 +1140,33 @@ void c_FPPDiscovery::ProcessBody (
     uint32_t index,
     uint32_t total)
 {
-    // DEBUG_START;
-    printReq (request, false);
-
-    // DEBUG_V(String("  len: ") + String(len));
-    // DEBUG_V(String("index: ") + String(index));
-    // DEBUG_V(String("total: ") + String(total));
-
-    do // once
+    if (request->getResponse() != nullptr)
     {
-        // is this the first packet?
-        if (0 == index)
+        return;
+    }
+    if (!request->hasParam(ulrPath) || request->getParam(ulrPath)->value() != F("uploadFile") ||
+        !request->hasParam(CN_filename))
+    {
+        request->send(404);
+        return;
+    }
+    if (index > total || len > total - index)
+    {
+        request->send(400);
+        if (uploadRequest == request)
         {
-            // DEBUG_V("New Download");
-
-            if(!request->hasParam(ulrPath))
-            {
-                // DEBUG_V("Missing URL Path param");
-                request->send (404);
-                break;
-            }
-
-            String path = request->getParam (ulrPath)->value ();
-            if (path == F ("uploadFile"))
-            {
-                if (!request->hasParam (CN_filename))
-                {
-                    // DEBUG_V ("Missing Filename Parameter");
-                    request->send (404);
-                    break;
-                }
-                strcpy(UploadFileName, request->getParam (CN_filename)->value ().c_str());
-                // DEBUG_V (emptyString);
-            }
-
-            writeFailed = false;
-
-            // DEBUG_V (String ("         name: ") + UploadFileName);
-            // DEBUG_V (String ("        index: ") + String (index));
-            // DEBUG_V (String ("          len: ") + String (len));
-            // DEBUG_V (String ("        total: ") + String (total));
-
-        } // end 0 == index
-
-        ProcessFile (request, UploadFileName, index, data, len, (total <= (index + len)), 0);
-
-    } while (false);
-
-    // DEBUG_END;
+            FileMgr.AbortSdFileUpload();
+            UploadFileName.clear();
+            uploadRequest = nullptr;
+            OutputMgr.ClearBuffer();
+            InputMgr.SetOperationalState(true);
+            OutputMgr.PauseOutputs(false);
+            inFileUpload = false;
+        }
+        return;
+    }
+    const String filename = request->getParam(CN_filename)->value();
+    ProcessFile(request, filename, index, data, len, len == total - index, total);
 } // ProcessBody
 
 //-----------------------------------------------------------------------------
@@ -1141,7 +1199,7 @@ void c_FPPDiscovery::GetSysInfoJSON (JsonObject & jsonResponse)
 
     JsonWrite(jsonResponse, CN_rssi, WiFi.RSSI ());
     JsonArray jsonResponseIpAddresses = jsonResponse[F ("IPS")].to<JsonArray> ();
-    jsonResponseIpAddresses.add(WiFi.localIP ().toString ());
+    jsonResponseIpAddresses.add(NetworkMgr.GetlocalIP ().toString ());
 
     // PrettyPrint(jsonResponse, "GetSysInfoJSON");
     // DEBUG_END;

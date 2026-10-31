@@ -25,6 +25,7 @@
 #include "network/NetworkMgr.hpp"
 #include "output/OutputMgr.hpp"
 #include "input/InputMgr.hpp"
+#include "service/FPPDiscovery.h"
 #include "UnzipFiles.hpp"
 
 SdFs sd;
@@ -44,9 +45,68 @@ char XlateFileMode[3] = { CN_r[0], CN_w[0], CN_w[0] };
 oflag_t XlateFileMode[3] = { O_READ , O_WRITE | O_CREAT, O_WRITE | O_APPEND };
 #endif // def SIMULATE_SD
 
+// SdFat can stop openNext() at a malformed LFN without setting a read error.
+// A later file can still be opened by name; do not hide it from every SD scan.
+bool c_FileMgr::OpenNextSdEntry(FsFile & Entry, FsFile & Directory)
+{
+    while (true)
+    {
+        FeedWDT();
+        const uint64_t start = Directory.curPosition();
+        if (Entry.openNext(&Directory, O_READ))
+        {
+            return true;
+        }
+        if (Directory.getError())
+        {
+            logcon(F("ERROR: SD directory read failed"));
+            return false;
+        }
+        const uint64_t next = Directory.curPosition();
+        if (next <= start || next < 32)
+        {
+            return false;
+        }
+        // openNext consumes the 32-byte directory record even on an ordinary
+        // end marker. Inspect that marker before deciding whether to retry.
+        uint8_t entryType = 0;
+        if (!Directory.seekSet(next - 32) || Directory.read(&entryType, 1) != 1 ||
+            !Directory.seekSet(next))
+        {
+            logcon(F("ERROR: Could not inspect SD directory entry"));
+            return false;
+        }
+        if (entryType == 0)
+        {
+            return false;
+        }
+        logcon(String(F("WARNING: Skipping invalid SD directory entry at offset ")) +
+               int64String(next - 32));
+    }
+}
+
 #ifdef SUPPORT_FTP
 #include <SimpleFTPServer.h>
 FtpServer   ftpSrv;
+static bool FtpUploadInProgress = false;
+static String FtpUploadName;
+
+static void FinishFtpUpload()
+{
+    const bool wasUploading = FtpUploadInProgress;
+    FtpUploadInProgress = false;
+#ifdef SUPPORT_UNZIP
+    String completedName = FtpUploadName;
+    completedName.toLowerCase();
+    if (wasUploading && (completedName.endsWith(".zip") || completedName.endsWith(".xlz")))
+    {
+        gUnzipFiles.Run();
+    }
+#else
+    (void)wasUploading;
+#endif
+    FtpUploadName.clear();
+}
 
 //-----------------------------------------------------------------------------
 void ftp_callback(FtpOperation ftpOperation, unsigned int freeSpace, unsigned int totalSpace)
@@ -63,6 +123,8 @@ void ftp_callback(FtpOperation ftpOperation, unsigned int freeSpace, unsigned in
 
         case FTP_DISCONNECT:
         {
+            FtpUploadInProgress = false;
+            FtpUploadName.clear();
             InputMgr.SetOperationalState(true);
             LOG_PORT.println(F("FTP: Disconnected!"));
             break;
@@ -70,6 +132,9 @@ void ftp_callback(FtpOperation ftpOperation, unsigned int freeSpace, unsigned in
 
         case FTP_FREE_SPACE_CHANGE:
         {
+            // This also covers empty/very short transfers for which the FTP
+            // library omits its transfer-stop callback.
+            FinishFtpUpload();
             FileMgr.BuildFseqList(false);
             LOG_PORT.printf("FTP: Free space change, free %u of %u! Rebuilding FSEQ file list\n", freeSpace, totalSpace);
             break;
@@ -91,6 +156,8 @@ void ftp_transferCallback(FtpTransferOperation ftpOperation, const char* name, u
     {
         case FTP_UPLOAD_START:
         {
+            FtpUploadInProgress = true;
+            FtpUploadName = name;
             LOG_PORT.println(String(F("FTP: Start Uploading '")) + name + "'");
             // size_t free = heap_caps_get_largest_free_block(0x1800);
             // LOG_PORT.printf("heap: 0x%x\n", free);
@@ -107,6 +174,8 @@ void ftp_transferCallback(FtpTransferOperation ftpOperation, const char* name, u
 
         case FTP_TRANSFER_STOP:
         {
+            // The library already closed the file; use its saved start name.
+            FinishFtpUpload();
             LOG_PORT.println(String(F("FTP: Done Uploading '")) + name + "'");
             // size_t free = heap_caps_get_largest_free_block(0x1800);
             // LOG_PORT.printf("heap: 0x%x\n", free);
@@ -115,6 +184,8 @@ void ftp_transferCallback(FtpTransferOperation ftpOperation, const char* name, u
 
         case FTP_TRANSFER_ERROR:
         {
+            FtpUploadInProgress = false;
+            FtpUploadName.clear();
             LOG_PORT.println(String(F("FTP: Error Uploading '")) + name + "'");
             break;
         }
@@ -206,13 +277,9 @@ void c_FileMgr::StartSdCard ()
     // DEBUG_V(String("FoundZipFile: ") + String(FoundZipFile))
     if(FoundZipFile)
     {
-        // DEBUG_V("Start Unzipping");
+        // Discover archives now; extraction waits for the network in Poll().
         FeedWDT();
-        UnzipFiles * Unzipper = new UnzipFiles();
-        Unzipper->Run();
-        delete Unzipper;
-        String Reason = F("Requesting reboot after unzipping files");
-        RequestReboot(Reason, 1, true);
+        gUnzipFiles.Run();
     }
     #endif // def SUPPORT_UNZIP
 
@@ -1056,6 +1123,7 @@ void c_FileMgr::InitSdFileList ()
     {
         currentFileListEntry.handle  = INVALID_FILE_HANDLE;
         currentFileListEntry.entryId = index++;
+        currentFileListEntry.Filename.reserve(256);
     }
 
     // DEBUG_END;
@@ -1210,6 +1278,8 @@ void c_FileMgr::GetListOfSdFiles (std::vector<String> & Response)
             if(MyFile.isDirectory())
             {
                 // not a file we are looking for
+                MyFile.close();
+                MyFile = root.openNextFile();
                 continue;
             }
 
@@ -1239,11 +1309,12 @@ void c_FileMgr::GetListOfSdFiles (std::vector<String> & Response)
             break;
         }
 
-        while (Entry.openNext (&dir, O_READ))
+        while (OpenNextSdEntry(Entry, dir))
         {
             if(!Entry.isFile() || Entry.isHidden())
             {
                 // not a file we are looking for
+                Entry.close();
                 continue;
             }
 
@@ -1288,7 +1359,7 @@ void c_FileMgr::printDirectory (FsFile & dir, int numTabs)
         tabs = tabs + "  ";
     }
 
-    while (Entry.openNext(&dir, O_READ))
+    while (OpenNextSdEntry(Entry, dir))
     {
         FeedWDT();
 
@@ -1407,15 +1478,14 @@ bool c_FileMgr::OpenSdFile (const String & _FileName, FileMode Mode, FileId & Fi
         if (-1 != FileListIndex)
         {
             // DEBUG_V(String("Valid FileListIndex: ") + String(FileListIndex));
-            memset(FileList[FileListIndex].Filename, 0x0, sizeof(FileList[FileListIndex].Filename));
-            strncpy(FileList[FileListIndex].Filename, FileName.c_str(), min(uint(sizeof(FileList[FileListIndex].Filename) - 1), FileName.length()));
+            FileList[FileListIndex].Filename = FileName;
             // DEBUG_V(String("Got file handle: ") + String(FileHandle));
             LockSd();
             #ifdef SIMULATE_SD
             FileList[FileListIndex].fsFile = ESP_SDFS.open (FileName, &XlateFileMode[Mode]);
             FileList[FileListIndex].IsOpen = true;
             #else
-            FileList[FileListIndex].IsOpen = FileList[FileListIndex].fsFile.open(FileList[FileListIndex].Filename, XlateFileMode[Mode]);
+            FileList[FileListIndex].IsOpen = FileList[FileListIndex].fsFile.open(FileList[FileListIndex].Filename.c_str(), XlateFileMode[Mode]);
             #endif // def SIMULATE_SD
             UnLockSd();
 
@@ -1654,7 +1724,12 @@ uint64_t c_FileMgr::WriteSdFile (const FileId& FileHandle, byte* FileData, uint6
         // DEBUG_V();
         NumBytesWritten = FileList[FileListIndex].fsFile.write((uint8_t*)FileData, NumBytesToWrite);
         // DEBUG_V();
+#ifdef SIMULATE_SD
         FileList[FileListIndex].fsFile.flush();
+        const bool syncOk = !FileList[FileListIndex].fsFile.getWriteError();
+#else
+        const bool syncOk = FileList[FileListIndex].fsFile.sync() && !FileList[FileListIndex].fsFile.getWriteError();
+#endif
         // DEBUG_V();
         UnLockSd();
         FeedWDT();
@@ -1662,7 +1737,7 @@ uint64_t c_FileMgr::WriteSdFile (const FileId& FileHandle, byte* FileData, uint6
         // DEBUG_V (String (" FileHandle: ") + String (FileHandle));
         // DEBUG_V (String ("File.Handle: ") + String (FileList[FileListIndex].handle));
 
-        if(NumBytesWritten != NumBytesToWrite)
+        if(NumBytesWritten != NumBytesToWrite || !syncOk)
         {
             logcon(String(F("ERROR: SD Write failed. Tried writting ")) + String(NumBytesToWrite) + F(" bytes. Actually wrote ") + String(NumBytesWritten) + F(" bytes."));
                     NumBytesWritten = 0;
@@ -1682,97 +1757,75 @@ uint64_t c_FileMgr::WriteSdFile (const FileId& FileHandle, byte* FileData, uint6
 */
 uint64_t c_FileMgr::WriteSdFileBuf (const FileId& FileHandle, byte* FileData, uint64_t NumBytesInSourceBuffer)
 {
-    // DEBUG_START;
-
-    uint64_t NumBytesWrittenToDestBuffer = 0;
-    bool ForceWriteToSD = (0 == NumBytesInSourceBuffer);
-    do // once
+    const int fileIndex = FileListFindSdFileHandle(FileHandle);
+    if (fileIndex < 0 || (NumBytesInSourceBuffer && FileData == nullptr))
     {
-        int FileListIndex;
-        // DEBUG_V (String("    NumBytesInSourceBuffer: ") + String(NumBytesInSourceBuffer));
-        // DEBUG_V (String("            ForceWriteToSD: ") + String(ForceWriteToSD));
-        if (-1 == (FileListIndex = FileListFindSdFileHandle (FileHandle)))
+        return NumBytesInSourceBuffer ? 0 : UINT64_MAX;
+    }
+    if (NumBytesInSourceBuffer == 0)
+    {
+        // A zero-length call explicitly flushes; distinguish errors from success.
+        return FlushSdFileBuffer(FileHandle) ? 0 : UINT64_MAX;
+    }
+    auto & buffer = FileList[fileIndex].buffer;
+    if (buffer.DataBuffer == nullptr || buffer.size == 0)
+    {
+        return WriteSdFile(FileHandle, FileData, NumBytesInSourceBuffer);
+    }
+    uint64_t copied = 0;
+    while (copied < NumBytesInSourceBuffer)
+    {
+        if (buffer.offset >= buffer.size && !FlushSdFileBuffer(FileHandle))
         {
-            logcon (String (F ("WriteSdFileBuf::ERROR::Invalid File Handle: ")) + String (FileHandle));
-            break;
+            return 0;
         }
+        const size_t chunk = size_t(min(buffer.size - buffer.offset, NumBytesInSourceBuffer - copied));
+        memcpy(buffer.DataBuffer + buffer.offset, FileData + copied, chunk);
+        buffer.offset += chunk;
+        copied += chunk;
+        FeedWDT();
+    }
+    return copied;
+} // WriteSdFileBuf
 
-        // are we using a buffer in front of the SD card?
-        if(nullptr == FileList[FileListIndex].buffer.DataBuffer)
+bool c_FileMgr::FlushSdFileBuffer(const FileId & FileHandle)
+{
+    const int fileIndex = FileListFindSdFileHandle(FileHandle);
+    if (fileIndex < 0)
+    {
+        return false;
+    }
+    auto & entry = FileList[fileIndex];
+    auto & buffer = entry.buffer;
+    FeedWDT();
+    LockSd();
+    bool success = true;
+    if (buffer.offset)
+    {
+        success = buffer.DataBuffer != nullptr && buffer.offset <= buffer.size;
+        if (success)
         {
-            delay(10);
-            FeedWDT();
-
-            // DEBUG_V("Not using buffers");
-            LockSd();
-            NumBytesWrittenToDestBuffer = FileList[FileListIndex].fsFile.write(FileData, NumBytesInSourceBuffer);
-            FileList[FileListIndex].fsFile.flush();
-            UnLockSd();
-
-            delay(20);
-            FeedWDT();
+            success = entry.fsFile.write(buffer.DataBuffer, size_t(buffer.offset)) == buffer.offset;
         }
-        else // buffered mode
-        {
-            // DEBUG_V("Using buffers");
-            // DEBUG_V(String("     NumBytesInSourceBuffer: ") + String(NumBytesInSourceBuffer));
-            uint64_t SpaceRemaining = FileList[FileListIndex].buffer.size - FileList[FileListIndex].buffer.offset;
-            // DEBUG_V(String("             SpaceRemaining: ") + String(SpaceRemaining));
-
-            if(ForceWriteToSD ||
-                  (NumBytesInSourceBuffer &&
-                  (SpaceRemaining < NumBytesInSourceBuffer)))
-            {
-                // DEBUG_V("Write out the buffer");
-                // delay(20);
-                // DEBUG_V(String("       BytesToBeWrittenToSD: ") + String(FileList[FileListIndex].buffer.offset));
-                FeedWDT();
-                LockSd();
-                uint64_t WroteToSdSize = FileList[FileListIndex].fsFile.write(FileList[FileListIndex].buffer.DataBuffer, FileList[FileListIndex].buffer.offset);
-                FileList[FileListIndex].fsFile.flush();
-                UnLockSd();
-                delay(30);
-                FeedWDT();
-                // DEBUG_V(String("                     offset: ") + String(FileList[FileListIndex].buffer.offset));
-                // DEBUG_V(String("              WroteToSdSize: ") + String(WroteToSdSize));
-                if(FileList[FileListIndex].buffer.offset != WroteToSdSize)
-                {
-                    logcon (String("WriteSdFileBuf:ERROR:SD Write Failed. Tried to write: ") +
-                            String(FileList[FileListIndex].buffer.offset) +
-                            " bytes. Actually wrote: " + String(WroteToSdSize))
-                    NumBytesWrittenToDestBuffer = 0;
-                    break;
-                } // end write failed
-                // reset the buffer
-                FileList[FileListIndex].buffer.offset = 0;
-                // DEBUG_V(String("                 New offset: ") + String(FileList[FileListIndex].buffer.offset));
-                ForceWriteToSD = false;
-            }
-
-            if(NumBytesInSourceBuffer)
-            {
-                // DEBUG_V(String("                    Writing ") + String(NumBytesInSourceBuffer) + " bytes to the buffer");
-                // DEBUG_V(String("                     offset: ") + String(FileList[FileListIndex].buffer.offset));
-                memcpy(&(FileList[FileListIndex].buffer.DataBuffer[FileList[FileListIndex].buffer.offset]), FileData, NumBytesInSourceBuffer);
-
-                FileList[FileListIndex].buffer.offset += NumBytesInSourceBuffer;
-                NumBytesWrittenToDestBuffer += NumBytesInSourceBuffer;
-                NumBytesInSourceBuffer -= NumBytesInSourceBuffer;
-                // DEBUG_V(String("NumBytesWrittenToDestBuffer: ") + String(NumBytesWrittenToDestBuffer));
-                // DEBUG_V(String("     NumBytesInSourceBuffer: ") + String(NumBytesInSourceBuffer));
-                // DEBUG_V(String("                 New offset: ") + String(FileList[FileListIndex].buffer.offset));
-
-            }; // End write to buffer
-        }
-        // DEBUG_V (String (" FileHandle: ") + String (FileHandle));
-        // DEBUG_V (String ("File.Handle: ") + String (FileList[FileListIndex].handle));
-
-    } while(false);
-
-    // DEBUG_END;
-    return NumBytesWrittenToDestBuffer;
-
-} // WriteSdFile
+    }
+#ifdef SIMULATE_SD
+    entry.fsFile.flush();
+    success = success && !entry.fsFile.getWriteError();
+#else
+    success = entry.fsFile.sync() && !entry.fsFile.getWriteError() && success;
+#endif
+    UnLockSd();
+    if (success)
+    {
+        buffer.offset = 0;
+    }
+    else
+    {
+        logcon(F("SD upload buffer flush failed"));
+    }
+    FeedWDT();
+    return success;
+}
 
 //-----------------------------------------------------------------------------
 uint64_t c_FileMgr::WriteSdFile (const FileId& FileHandle, byte* FileData, uint64_t NumBytesToWrite, uint64_t StartingPosition)
@@ -1849,6 +1902,10 @@ uint64_t c_FileMgr::GetSdFileSize (const FileId& FileHandle)
 //-----------------------------------------------------------------------------
 void c_FileMgr::RenameSdFile(const String & OldName, const String & NewName)
 {
+    if (OldName.equalsIgnoreCase(NewName))
+    {
+        return;
+    }
     // DEBUG_START;
     // DEBUG_V(String("OldName: '") + OldName + "'");
     // DEBUG_V(String("NewName: '") + NewName + "'");
@@ -1869,6 +1926,119 @@ void c_FileMgr::RenameSdFile(const String & OldName, const String & NewName)
 #endif // ndef SIMULATE_SD
     // DEBUG_END;
 } // RenameSdFile
+
+// Replace a completed staged file without discarding the previous good copy.
+// If power or a rename fails, the previous file remains at TargetName or .unzip.bak.
+bool c_FileMgr::ReplaceSdFile(const String & TempName, const String & TargetName)
+{
+    if (!SdCardInstalled || TempName.isEmpty() || TargetName.isEmpty())
+    {
+        return false;
+    }
+#ifdef SIMULATE_SD
+    const String source = String(CN_slashsdslash) + TempName;
+    const String target = String(CN_slashsdslash) + TargetName;
+#else
+    const String source = TempName;
+    const String target = TargetName;
+#endif
+    const String backup = target + F(".unzip.bak");
+    auto normalizedPath = [](String path)
+    {
+        path.replace("\\", "/");
+        path.toLowerCase();
+        String normalized;
+        unsigned position = 0;
+        while (position < path.length())
+        {
+            const int slash = path.indexOf('/', position);
+            const unsigned end = slash < 0 ? unsigned(path.length()) : unsigned(slash);
+            String component = path.substring(position, end);
+            while (component.startsWith(" ")) component.remove(0, 1);
+            while (component.endsWith(" ")) component.remove(unsigned(component.length() - 1));
+            if (component == "..")
+            {
+                const int parent = normalized.lastIndexOf('/');
+                normalized.remove(parent < 0 ? 0 : unsigned(parent));
+            }
+            else if (component != ".")
+            {
+                while (component.endsWith(".") || component.endsWith(" "))
+                {
+                    component.remove(unsigned(component.length() - 1));
+                }
+                if (!component.isEmpty())
+                {
+                    if (!normalized.isEmpty()) normalized += '/';
+                    normalized += component;
+                }
+            }
+            position = end + 1;
+        }
+        return normalized;
+    };
+    const String normalizedTarget = normalizedPath(target);
+    const String normalizedBackup = normalizedPath(backup);
+    LockSd();
+#if !defined(SIMULATE_SD) && !defined(SUPPORT_SD_MMC)
+    ESP_SD.chdir();
+#endif
+    bool success = false;
+    do
+    {
+        bool fileInUse = false;
+        for (const auto & entry : FileList)
+        {
+            if (!entry.IsOpen) continue;
+            const String openedName = normalizedPath(entry.Filename);
+            if (openedName == normalizedTarget || openedName == normalizedBackup)
+            {
+                logcon(String(F("Cannot replace open SD file: ")) + entry.Filename);
+                fileInUse = true;
+                break;
+            }
+        }
+        if (fileInUse) break;
+        if (source.equalsIgnoreCase(target))
+        {
+            success = ESP_SD.exists(source.c_str());
+            break;
+        }
+        if (!ESP_SD.exists(source.c_str()))
+        {
+            break;
+        }
+        // Recover a previous interrupted replacement before starting another.
+        if (ESP_SD.exists(backup.c_str()))
+        {
+            if (ESP_SD.exists(target.c_str()) || !ESP_SD.rename(backup.c_str(), target.c_str()))
+            {
+                logcon(String(F("Preserving recovery file: ")) + backup);
+                break;
+            }
+        }
+        const bool hadTarget = ESP_SD.exists(target.c_str());
+        if (hadTarget && !ESP_SD.rename(target.c_str(), backup.c_str()))
+        {
+            break;
+        }
+        if (!ESP_SD.rename(source.c_str(), target.c_str()))
+        {
+            if (hadTarget && !ESP_SD.rename(backup.c_str(), target.c_str()))
+            {
+                logcon(String(F("Previous sequence preserved in: ")) + backup);
+            }
+            break;
+        }
+        success = true;
+        if (hadTarget && !ESP_SD.remove(backup.c_str()))
+        {
+            logcon(String(F("Could not remove recovery file: ")) + backup);
+        }
+    } while (false);
+    UnLockSd();
+    return success;
+}
 
 //-----------------------------------------------------------------------------
 void c_FileMgr::BuildFseqList(bool DisplayFileNames)
@@ -1929,6 +2099,7 @@ void c_FileMgr::BuildFseqList(bool DisplayFileNames)
             {
                 // DEBUG_V("Skip embedded directory and hidden files");
                 CurrentEntry.close();
+                CurrentEntry = InputFile.openNextFile();
                 continue;
             }
 
@@ -1985,7 +2156,7 @@ void c_FileMgr::BuildFseqList(bool DisplayFileNames)
         } // end while true
     #else
         FsFile CurrentEntry;
-        while (CurrentEntry.openNext (&InputDir, O_READ))
+        while (OpenNextSdEntry(CurrentEntry, InputDir))
                 {
             // DEBUG_V("Process a file entry");
             FeedWDT();
@@ -2144,7 +2315,7 @@ void c_FileMgr::FindFirstZipFile(String &FileName)
         ESP_SD.chdir();
 
         FsFile CurrentEntry;
-        while (CurrentEntry.openNext (&InputFile, O_READ))
+        while (OpenNextSdEntry(CurrentEntry, InputFile))
         {
             // DEBUG_V("Process a file entry");
             FeedWDT();
@@ -2197,117 +2368,63 @@ bool c_FileMgr::handleFileUpload (
     bool final,
     uint32_t totalLen)
 {
-    // DEBUG_START;
-    bool response = false;
-
-    // try to keep a reboot from causing a corrupted file
-    // DelayReboot(10000);
-
-    // DEBUG_V (String ("filename: ") + filename);
-    // DEBUG_V (String ("   index: ") + String (index));
-    // DEBUG_V (String ("     len: ") + String (len));
-    // DEBUG_V (String ("   final: ") + String (final));
-    // DEBUG_V (String ("   total: ") + String (totalLen));
-
-    do // once
+    FeedWDT();
+    if (index == 0)
     {
-        FeedWDT();
-        if ((0 == index))
+#ifdef SUPPORT_UNZIP
+        if (gUnzipFiles.IsFileInUse(filename))
         {
-            // DEBUG_V("New File");
-            handleFileUploadNewFile (filename);
-            expectedIndex = 0;
-            // LOG_PORT.println(".");
+            return false;
         }
-
-        if (index != expectedIndex)
-        {
-            if(fsUploadFileHandle != INVALID_FILE_HANDLE)
-            {
-                logcon (String(F("ERROR: Expected index: ")) + String(expectedIndex) + F(" does not match actual index: ") + String(index));
-
-                // DEBUG_FILE_HANDLE (fsUploadFileHandle);
-                // DEBUG_V(String("fsUploadFileName: ") + fsUploadFileName);
-                CloseSdFile (fsUploadFileHandle);
-                // DEBUG_V(String("fsUploadFileName: ") + fsUploadFileName);
-                DeleteSdFile (fsUploadFileName);
-                delay(100);
-                BuildFseqList(false);
-                expectedIndex = 0;
-                fsUploadFileName.clear();
-            }
-            break;
-        }
-
-        // DEBUG_V (String ("fsUploadFileName: ") + String (fsUploadFileName));
-
-        // update the next expected chunk id
-        expectedIndex = index + len;
-        size_t bytesWritten = 0;
-
-        if (len)
-        {
-            // Write data
-            // DEBUG_V ("UploadWrite: " + String (len) + String (" bytes"));
-            bytesWritten = WriteSdFileBuf (fsUploadFileHandle, data, len);
-            // DEBUG_V (String ("Writing bytes: ") + String (index));
-#ifdef ARDUINO_ARCH_ESP32
-            LOG_PORT.println(String("\033[Fprogress: ") + String(expectedIndex) + ", heap: " + String(heap_caps_get_largest_free_block(0x1800)));
-#else
-            LOG_PORT.println(String("\033[Fprogress: ") + String(expectedIndex) + ", heap: " + String(ESP.getFreeHeap ()));
-#endif // def ARDUINO_ARCH_ESP32
-            LOG_PORT.flush();
-        }
-        // PauseSdFile(fsUploadFile);
-
-        if(len != bytesWritten)
-        {
-            // DEBUG_V("Write failed. Stop transfer");
-            // DEBUG_FILE_HANDLE (fsUploadFileHandle);
-            CloseSdFile(fsUploadFileHandle);
-            DeleteSdFile (fsUploadFileName);
-            expectedIndex = 0;
-            fsUploadFileName.clear();
-            break;
-        }
-        response = true;
-    } while(false);
-
-    if ((true == final) && (fsUploadFileHandle != INVALID_FILE_HANDLE))
-    {
-        // DEBUG_V(String("fsUploadFileName: ") + String(fsUploadFileName));
-        // cause the remainder in the buffer to be written.
-        WriteSdFileBuf (fsUploadFileHandle, data, 0);
-        uint32_t uploadTime = (uint32_t)(millis() - fsUploadStartTime) / 1000;
-        FeedWDT();
-         // DEBUG_FILE_HANDLE (fsUploadFileHandle);
-        CloseSdFile (fsUploadFileHandle);
-
-        logcon (String (F ("Upload File: '")) + fsUploadFileName +
-                F ("' Done (") + String (uploadTime) +
-                F ("s). Received: ") + String(expectedIndex) +
-                F(" Bytes out of ") + String(totalLen) +
-                F(" bytes. FileLen: ") + GetSdFileSize(filename));
-
-        FeedWDT();
+#endif
+        handleFileUploadNewFile(filename);
         expectedIndex = 0;
-
-        delay(100);
+    }
+    if (fsUploadFileHandle == INVALID_FILE_HANDLE || !fsUploadFileName.equals(filename) ||
+        index != expectedIndex || len > UINT32_MAX - expectedIndex ||
+        (len && WriteSdFileBuf(fsUploadFileHandle, data, len) != len))
+    {
+        logcon(String(F("Upload failed for: ")) + filename);
+        AbortSdFileUpload();
         BuildFseqList(false);
-
-        // DEBUG_V(String("Expected: ") + String(totalLen));
-        // DEBUG_V(String("     Got: ") + String(GetSdFileSize(fsUploadFileName)));
-        if(IsCompressed(fsUploadFileName))
-        {
-            // String reason = F("Reboot after receiving a compressed file");
-            // RequestReboot(reason, 100000);
-        }
-
-        fsUploadFileName.clear();
+        return false;
+    }
+    expectedIndex += uint32_t(len);
+    if (!final)
+    {
+        return true;
     }
 
-    // DEBUG_END;
-    return response;
+    // HTTP Content-Length includes multipart boundaries, so validate the SD
+    // file against accepted payload bytes rather than the request body length.
+    const bool flushed = FlushSdFileBuffer(fsUploadFileHandle);
+    const uint32_t payloadSize = expectedIndex;
+    CloseSdFile(fsUploadFileHandle);
+    const uint64_t storedSize = GetSdFileSize(fsUploadFileName);
+    const bool success = flushed && storedSize == payloadSize;
+    if (success)
+    {
+        logcon(String(F("Upload File: '")) + fsUploadFileName + F("' Done (") +
+               String((millis() - fsUploadStartTime) / 1000) + F("s). Received: ") +
+               String(payloadSize) + F(" bytes. FileLen: ") + int64String(storedSize));
+#ifdef SUPPORT_UNZIP
+        if (IsCompressed(fsUploadFileName))
+        {
+            gUnzipFiles.Run();
+        }
+#endif
+    }
+    else
+    {
+        logcon(String(F("Upload failed size or flush validation: ")) + fsUploadFileName);
+        DeleteSdFile(fsUploadFileName);
+    }
+    BuildFseqList(false);
+    fsUploadFileName.clear();
+    expectedIndex = 0;
+    fsUploadInProgress = false;
+    (void)totalLen;
+    return success;
 } // handleFileUpload
 
 //-----------------------------------------------------------------------------
@@ -2317,6 +2434,7 @@ void c_FileMgr::handleFileUploadNewFile (const String & filename)
     // DEBUG_V ("UploadStart: " + filename);
 
     fsUploadStartTime = millis();
+    fsUploadInProgress = true;
     // DEBUG_V(String("filename: ") + String(filename));
 
     // are we terminating the previous download?
@@ -2324,7 +2442,11 @@ void c_FileMgr::handleFileUploadNewFile (const String & filename)
     {
         logcon (String (F ("Aborting Previous File Upload For: '")) + fsUploadFileName + String (F ("'")));
         // DEBUG_FILE_HANDLE (fsUploadFileHandle);
-        CloseSdFile (fsUploadFileHandle);
+        if (fsUploadFileHandle != INVALID_FILE_HANDLE)
+        {
+            CloseSdFile(fsUploadFileHandle);
+        }
+        DeleteSdFile(fsUploadFileName);
     }
 
     // Set up to receive a file
@@ -2348,7 +2470,8 @@ void c_FileMgr::handleFileUploadNewFile (const String & filename)
         // DEBUG_V("Use the output buffer as a data buffer");
         FileList[FileListIndex].buffer.offset = 0;
         FileList[FileListIndex].buffer.size = min(uint32_t(OutputMgr.GetBufferSize() & ~(SD_BLOCK_SIZE - 1)), uint32_t(MAX_SD_BUFFER_SIZE));
-        FileList[FileListIndex].buffer.DataBuffer = OutputMgr.GetBufferAddress();
+        FileList[FileListIndex].buffer.DataBuffer = FileList[FileListIndex].buffer.size
+            ? OutputMgr.GetBufferAddress() : nullptr;
         // DEBUG_V(String("Buffer Size: ") + String(FileList[FileListIndex].buffer.size));
     }
 
@@ -2454,16 +2577,27 @@ void c_FileMgr::UnLockSd()
 //-----------------------------------------------------------------------------
 void c_FileMgr::AbortSdFileUpload()
 {
-    // DEBUG_START;
-
-    if(fsUploadFileHandle != INVALID_FILE_HANDLE)
+    if (fsUploadFileHandle != INVALID_FILE_HANDLE)
     {
-        // DEBUG_FILE_HANDLE (fsUploadFileHandle);
         CloseSdFile(fsUploadFileHandle);
     }
+    if (!fsUploadFileName.isEmpty())
+    {
+        DeleteSdFile(fsUploadFileName);
+    }
+    fsUploadFileName.clear();
+    expectedIndex = 0;
+    fsUploadInProgress = false;
+}
 
-    // DEBUG_END;
-} // AbortSdFileUpload
+bool c_FileMgr::IsUploadInProgress() const
+{
+    return fsUploadInProgress || FPPDiscovery.IsUploadInProgress()
+#ifdef SUPPORT_FTP
+        || FtpUploadInProgress
+#endif
+        ;
+}
 
 //-----------------------------------------------------------------------------
 bool c_FileMgr::IsCompressed(String FileName)
@@ -2473,7 +2607,7 @@ bool c_FileMgr::IsCompressed(String FileName)
 
     // DEBUG_V(String("FileName: ") + FileName);
     FileName.toLowerCase();
-    Response = ((-1 != FileName.indexOf(F(".zip"))) || (-1 != FileName.indexOf(F(".xlz"))));
+    Response = FileName.endsWith(".zip") || FileName.endsWith(".xlz");
     // DEBUG_V(String("Response: ") + String(Response));
 
     // DEBUG_END;
@@ -2483,10 +2617,41 @@ bool c_FileMgr::IsCompressed(String FileName)
 //-----------------------------------------------------------------------------
 void c_FileMgr::GetSdInfo(SdInfo & Response)
 {
-    Response.MaxSize = SdCardSize;
-    // TODO Response.Used = ESP_SD..usedBytes();
-    Response.Available = SdCardSize - Response.Used;
-
+    Response = SdInfo();
+    if (!SdCardInstalled)
+    {
+        return;
+    }
+    FeedWDT();
+    LockSd();
+#ifdef SIMULATE_SD
+#ifdef ARDUINO_ARCH_ESP32
+    Response.MaxSize = LittleFS.totalBytes();
+    Response.Used = LittleFS.usedBytes();
+#else
+    FSInfo info;
+    if (LittleFS.info(info))
+    {
+        Response.MaxSize = info.totalBytes;
+        Response.Used = info.usedBytes;
+    }
+#endif
+    Response.Available = Response.MaxSize > Response.Used ? Response.MaxSize - Response.Used : 0;
+#elif defined(SUPPORT_SD_MMC)
+    Response.MaxSize = ESP_SD.totalBytes();
+    Response.Used = ESP_SD.usedBytes();
+    Response.Available = Response.MaxSize > Response.Used ? Response.MaxSize - Response.Used : 0;
+#else
+    const uint64_t bytesPerCluster = sd.bytesPerCluster();
+    const uint32_t clusters = sd.clusterCount();
+    const uint32_t freeClusters = sd.freeClusterCount();
+    Response.MaxSize = uint64_t(clusters) * bytesPerCluster;
+    // An invalid free-cluster result is deliberately treated as no room.
+    Response.Available = freeClusters <= clusters ? uint64_t(freeClusters) * bytesPerCluster : 0;
+    Response.Used = Response.MaxSize - Response.Available;
+#endif
+    UnLockSd();
+    FeedWDT();
 } // GetSdInfo
 
 // create a global instance of the File Manager

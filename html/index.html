@@ -170,6 +170,14 @@
             <div><strong>TEST MODE ACTIVE</strong> <span id="testmode-banner-detail"></span></div>
             <button type="button" class="btn btn-danger testmode-stop">Stop Test &amp; Resume</button>
         </div>
+        <div id="unzipStatusIndicator" class="unzip-status alert hidden" role="status" aria-live="polite" aria-atomic="true">
+            <strong id="unzipStatusTitle"></strong>
+            <div id="unzipStatusDetail"></div>
+            <div id="unzipStatusProgress" class="progress hidden">
+                <div id="unzipStatusProgressBar" class="progress-bar" role="progressbar" aria-label="Current file extraction" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width: 0%"></div>
+            </div>
+            <div id="unzipStatusConnection" class="hidden"></div>
+        </div>
         <!-- Home / Status page -->
         <div id="home" class="collapse in mdiv anchor">
             <div class="row">
@@ -1127,6 +1135,7 @@
                             <p>Click to Upload a file with the file dialog or drag and drop a file into the dashed
                                 region</p>
                         </div>
+                        <p class="help-block">Upload .fseq sequences, .pl playlists, or .zip / .xlz archives. Archives extract automatically after the controller connects to the network. Extraction status appears above.</p>
 
                     </fieldset>
                 </div>

@@ -34,6 +34,7 @@
 #endif
 
 #include <ESPAsyncWebServer.h>
+#include <atomic>
 
 class c_FPPSemaphore
 {
@@ -58,7 +59,8 @@ private:
     void ProcessBlankPacket ();
     bool PlayingFile ();
 
-    bool inFileUpload = false;
+    std::atomic<bool> inFileUpload {false};
+    AsyncWebServerRequest * uploadRequest = nullptr;
     bool writeFailed = false;
     bool hasBeenInitialized = false;
     bool IsEnabled = false;
@@ -66,7 +68,7 @@ private:
     bool StopInProgress = false;
     bool FppSyncOverride = false;
     char ConfiguredFileToPlay[65];
-    char UploadFileName[65];
+    String UploadFileName;
     IPAddress FppRemoteIp = IPAddress (uint32_t(0));
     c_InputFPPRemote * InputFPPRemote = nullptr;
     const IPAddress MulticastAddress = IPAddress (239, 70, 80, 80);
@@ -140,6 +142,7 @@ public:
     void ProcessPOST         (AsyncWebServerRequest* request);
     void ProcessFile         (AsyncWebServerRequest* request, String filename, uint32_t index, uint8_t* data, uint32_t len, bool final, uint32_t contentLength = 0);
     void ProcessBody         (AsyncWebServerRequest* request, uint8_t* data, uint32_t len, uint32_t index, uint32_t total);
+    void FinishFileUpload    (AsyncWebServerRequest* request);
     void sendPingPacket      (IPAddress destination);
     void PlayFile            (String & FileToPlay);
     void Enable              (void);
@@ -156,6 +159,7 @@ public:
     void GenerateFppSyncMsg           (uint8_t Action, const String & FileName, uint32_t CurrentFrame, const float & ElpsedTime);
     void GetSysInfoJSON               (JsonObject& jsonResponse);
     bool PlayingAfile                 () {return PlayingFile();}
+    bool IsUploadInProgress() const   {return inFileUpload;}
 
 #   define SYNC_PKT_START       0
 #   define SYNC_PKT_STOP        1

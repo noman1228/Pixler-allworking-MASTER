@@ -209,7 +209,9 @@ void fsm_PlayList_state_PlayingFile::Stop (void)
     // DEBUG_V ("");
     
     pInputFPPRemotePlayItemTemp->Stop ();
-    delete pInputFPPRemotePlayItemTemp;
+    pInputFPPRemotePlayList->pInputFPPRemotePlayItem = nullptr;
+    // The child was placement-new'd into the playlist's own buffer.
+    pInputFPPRemotePlayItemTemp->~c_InputFPPRemotePlayItem();
     
     // DEBUG_END;
 
