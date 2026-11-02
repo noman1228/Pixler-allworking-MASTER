@@ -25,6 +25,10 @@ Being open source, you are free to use the ESPixelStick firmware on the device o
 
 The recommended way to build ESPixelStick is with PlatformIO. Building from the Arduino IDE is no longer supported.
 
+The Dig-Octa also has an optional eight-output parallel I2S build. See
+[Parallel I2S for Dig-Octa](docs/PARALLEL_I2S.md) for its scope, build target,
+memory limits, and validation instructions.
+
 ### Platform IO Instructions
 
 - Download and install [Visual Studio Code](https://code.visualstudio.com/).

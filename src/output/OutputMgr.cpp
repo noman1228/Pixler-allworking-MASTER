@@ -43,6 +43,10 @@
 #include "output/OutputWS2801Spi.hpp"
 #include "output/OutputWS2811Rmt.hpp"
 #include "output/OutputWS2811Uart.hpp"
+#if defined(SUPPORT_PARALLEL_I2S)
+#include "output/OutputWS2811I2s.hpp"
+#include "output/OutputI2s.hpp"
+#endif
 #include "output/OutputMonsterPermanentRmt.hpp"
 #include "output/OutputMonsterPermanentUart.hpp"
 #include "output/OutputGS8208Uart.hpp"
@@ -825,7 +829,11 @@ void c_OutputMgr::InstantiateNewOutputChannel(DriverInfo_t & CurrentOutput, e_Ou
                 {
                     // DEBUG_V ("RMT");
                     // logcon (CN_stars + String (F (" Starting WS2811 RMT for channel '")) + CurrentOutput.DriverId + "'. " + CN_stars);
+#if defined(SUPPORT_PARALLEL_I2S)
+                    AllocatePort(c_OutputWS2811I2s,CurrentOutput,CurrentOutput.DriverId,CurrentOutput.GpioPin,CurrentOutput.PortId,OutputType_WS2811);
+#else
                     AllocatePort(c_OutputWS2811Rmt,CurrentOutput,CurrentOutput.DriverId,CurrentOutput.GpioPin,CurrentOutput.PortId,OutputType_WS2811);
+#endif
                     // DEBUG_V ();
                     break;
                 }
@@ -1105,6 +1113,9 @@ void c_OutputMgr::LoadConfig ()
         if (TestMode.active || ConfigInProgress) { return; }
         ConfigReload.TakeIfDue(millis(), LOAD_CONFIG_DELAY * 1000u);
         ConfigInProgress = true;
+#if defined(SUPPORT_PARALLEL_I2S)
+        OutputI2s.PrepareForConfig();
+#endif
         // Transmitters do not use ConfigInProgress. Stop them before changing
         // pin, timing, pixel-count, or gamma state in the existing drivers.
         for (auto& output : OutputChannelDrivers)
@@ -1472,6 +1483,9 @@ void c_OutputMgr::Poll()
             // //DEBUG_V("Poll a channel");
             ((c_OutputCommon*)CurrentOutput.OutputDriver)->Poll ();
         }
+#if defined(SUPPORT_PARALLEL_I2S)
+        OutputI2s.Poll();
+#endif
     }
 
     // //DEBUG_END;

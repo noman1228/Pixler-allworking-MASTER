@@ -15,6 +15,7 @@ tests/*
 !tests/unzip/
 !tests/testmode/
 !tests/config/
+!tests/i2s/
 
 dist
 data

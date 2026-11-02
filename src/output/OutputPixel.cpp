@@ -451,6 +451,41 @@ void c_OutputPixel::StartNewFrame ()
     // DEBUG_END;
 } // StartNewFrame
 
+// A snapshot uses the same byte serializer as the hardware drivers. Its caller
+// holds the output-data lock, so a complete frame observes one stable source.
+uint64_t c_OutputPixel::GetWireFrameByteCount() const
+{
+    if (!OutputBufferSize || !NumIntensityBytesPerPixel) { return 0; }
+    const uint64_t nullPixels = uint64_t(PrependNullPixelCount) + AppendNullPixelCount;
+    const uint64_t pixels = (uint64_t(OutputBufferSize) + NumIntensityBytesPerPixel - 1) / NumIntensityBytesPerPixel;
+    uint64_t bytes = uint64_t(FramePrependDataSize) + FrameAppendDataSize + OutputBufferSize +
+        nullPixels * NumIntensityBytesPerPixel + (pixels + nullPixels) * PixelPrependDataSize;
+    if (MonsterPermanentRgb) { bytes = ((bytes + 2) / 3) * 6; }
+    return bytes;
+}
+
+bool c_OutputPixel::SnapshotFrame(uint8_t* destination, size_t capacity, size_t& written)
+{
+    written = 0;
+    const uint64_t expected = GetWireFrameByteCount();
+    if (!expected || expected > capacity || !destination || !pOutputBuffer ||
+        (FramePrependDataSize && !pFramePrependData) ||
+        (FrameAppendDataSize && !pFrameAppendData) || (PixelPrependDataSize && !PixelPrependData))
+    {
+        return false;
+    }
+    StartNewFrame();
+    bool more;
+    do
+    {
+        if (written >= capacity) { return false; }
+        uint32_t value;
+        more = ISR_GetNextIntensityToSend(value);
+        destination[written++] = uint8_t(value);
+    } while (more);
+    return written == expected;
+}
+
 //----------------------------------------------------------------------------
 void c_OutputPixel::SetIntensityDataWidth(uint32_t DataWidth)
 {

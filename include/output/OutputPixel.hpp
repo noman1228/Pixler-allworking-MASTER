@@ -176,6 +176,8 @@ public:
              void         StartNewFrame();
     inline   bool IRAM_ATTR ISR_MoreDataToSend () {return MonsterRecordIndex < 6 || (&c_OutputPixel::FrameDone != FrameStateFuncPtr);}
              bool IRAM_ATTR ISR_GetNextIntensityToSend (uint32_t &DataToSend);
+             uint64_t     GetWireFrameByteCount() const;
+             bool         SnapshotFrame(uint8_t* destination, size_t capacity, size_t& written);
     void                  SetPixelCount(uint32_t value) {pixel_count = value;}
     uint32_t              GetPixelCount() {return pixel_count;}
     uint32_t              GetTestPixelCount() override;
