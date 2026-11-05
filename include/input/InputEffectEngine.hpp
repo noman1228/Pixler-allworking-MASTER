@@ -101,11 +101,9 @@ public:
     uint16_t effectRainbow ();
     uint16_t effectChase ();
     uint16_t effectBlink ();
-    uint16_t effectFlash ();
     uint16_t effectFireFlicker ();
     uint16_t effectLightning ();
     uint16_t effectBreathe ();
-    uint16_t effectNull ();
     uint16_t effectRandom ();
     uint16_t effectTransition ();
     uint16_t effectMarquee ();
@@ -121,7 +119,6 @@ private:
 
     using timeType = decltype(millis());
 
-    uint32_t EffectWait            = 0;               /* How long to wait for the effect to run again */
     uint32_t EffectCounter         = 0;               /* Counter for the number of calls to the active effect */
     uint32_t EffectSpeed           = 6;               /* Externally controlled effect speed 1..10 */
     uint32_t EffectDelay           = 0;               /* Internal representation of speed */
@@ -160,7 +157,6 @@ private:
     void setBrightness (float brightness);
     void setSpeed (uint16_t speed);
     void setDelay (uint16_t delay);
-    void PollFlash();
 
     void clearAll ();
 
@@ -170,9 +166,9 @@ private:
     {
         dCRGB       CurrentColor    = {0.0, 0.0, 0.0};
         dCRGB       StepValue       = {2.0, 2.0, 2.0};
-        uint32_t    StepsToTarget   = 300; // number of NumStepsToTarget
-        uint32_t    TimeAtTargetMs  = 100; // number of milli seconds to stay at the target color.
-        uint32_t    HoldStartTimeMs = 0; // time at which transition hold time was started. 0 == off
+        uint32_t    StepsToTarget   = 300;
+        uint32_t    TimeAtTargetMs  = 100;
+        uint32_t    HoldStartTimeMs = 0;
         std::vector<c_InputEffectEngine::dCRGB>::iterator TargetColorIterator;
     } TransitionInfo;
 
@@ -180,18 +176,5 @@ private:
     bool ColorHasReachedTarget (double tc, double cc, double step);
     void ConditionalIncrementColor(double tc, double & cc, double step);
     void CalculateTransitionStepValue(double tc, double cc, double & step);
-
-    struct FlashInfo_t
-    {
-        bool     Enable           = false;
-		uint32_t MinIntensity     = 100;
-		uint32_t MaxIntensity     = 100;
-		uint32_t MinDelayMS       = 100;
-		uint32_t MaxDelayMS       = 5000;
-		uint32_t MinDurationMS    = 25;
-		uint32_t MaxDurationMS    = 50;
-        FastTimer delaytimer;
-        FastTimer durationtimer;
-    } FlashInfo;
 
 };

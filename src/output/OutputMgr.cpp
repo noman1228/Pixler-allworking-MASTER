@@ -24,6 +24,7 @@
 #include "ESPixelStick.h"
 #include "FileMgr.hpp"
 #include <TimeLib.h>
+#include <stdlib.h>
 
 //-----------------------------------------------------------------------------
 // bring in driver definitions
@@ -247,13 +248,36 @@ static const OutputChannelIdToGpioAndPortEntry_t OutputChannelIdToGpioAndPort[] 
 //-----------------------------------------------------------------------------
 // Methods
 //-----------------------------------------------------------------------------
+uint32_t c_OutputMgr::GetBufferSize()
+{
+    return OM_MAX_NUM_CHANNELS;
+}
+
+bool c_OutputMgr::PrepareBuffer()
+{
+#if defined(BOARD_ESP32_QUINLED_DIG_OCTA)
+    if (!OutputBuffer)
+    {
+        OutputBuffer = static_cast<uint8_t*>(calloc(OM_MAX_NUM_CHANNELS, sizeof(uint8_t)));
+        if (!OutputBuffer)
+        {
+            logcon(F("ERROR: Unable to allocate output buffer"));
+            return false;
+        }
+    }
+#endif
+    return true;
+}
+
 ///< Start up the driver and put it into a safe mode
 c_OutputMgr::c_OutputMgr ()
 {
     ConfigFileName = String ("/") + String (CN_output_config) + CN_Dotjson;
 
     // clear the input data buffer
+#if !defined(BOARD_ESP32_QUINLED_DIG_OCTA)
     memset ((char*)&OutputBuffer[0], 0, sizeof (OutputBuffer));
+#endif
     for (DriverInfo_t & CurrentOutput : OutputChannelDrivers)
     {
         memset (CurrentOutput.OutputDriver, 0, sizeof (CurrentOutput.OutputDriver));
@@ -273,6 +297,9 @@ c_OutputMgr::~c_OutputMgr()
         // the drivers will put the hardware in a safe state
         ((c_OutputCommon*)CurrentOutput.OutputDriver)->~c_OutputCommon();
     }
+#if defined(BOARD_ESP32_QUINLED_DIG_OCTA)
+    free(OutputBuffer);
+#endif
     // DEBUG_END;
 
 } // ~c_OutputMgr
@@ -281,6 +308,12 @@ c_OutputMgr::~c_OutputMgr()
 ///< Start the module
 void c_OutputMgr::Begin ()
 {
+    if (!PrepareBuffer())
+    {
+        String Reason = F("ERROR: Unable to allocate output buffer");
+        RequestReboot(Reason, 100000);
+        return;
+    }
 #ifdef ARDUINO_ARCH_ESP32
     if (!OutputDataMutex) { OutputDataMutex = xSemaphoreCreateRecursiveMutex(); }
 #endif
@@ -329,7 +362,7 @@ void c_OutputMgr::Begin ()
         // CreateNewConfig();
 
         // Preset the output memory
-        memset((void*)&OutputBuffer[0], 0x00, sizeof(OutputBuffer));
+        memset(OutputBuffer, 0x00, GetBufferSize());
 
     } while (false);
 
@@ -436,7 +469,7 @@ void c_OutputMgr::CreateNewConfig ()
     // DEBUG_V ();
 
     JsonWrite(JsonConfig, CN_cfgver,      ConstConfig.CurrentConfigVersion);
-    JsonWrite(JsonConfig, CN_MaxChannels, sizeof(OutputBuffer));
+    JsonWrite(JsonConfig, CN_MaxChannels, GetBufferSize());
 
     // DEBUG_V("Collect the all ports disabled config first");
     CreateJsonConfig (JsonConfig);
@@ -1527,7 +1560,7 @@ void c_OutputMgr::UpdateDisplayBufferReferences (void)
         ++index;
     }
 
-    // DEBUG_V (String ("        BufferSize: ") + String (sizeof(OutputBuffer)));
+    // DEBUG_V (String ("        BufferSize: ") + String (GetBufferSize()));
     // DEBUG_V (String ("OutputBufferOffset: ") + String (OutputBufferOffset));
 
     index = 0;
@@ -1541,7 +1574,7 @@ void c_OutputMgr::UpdateDisplayBufferReferences (void)
         uint32_t OutputBufferDataBytesNeeded = RequestedBytes[index];
         uint32_t VirtualOutputBufferDataBytesNeeded = RequestedChannels[index++];
 
-        uint32_t AvailableChannels = sizeof(OutputBuffer) - OutputBufferOffset;
+        uint32_t AvailableChannels = GetBufferSize() - OutputBufferOffset;
 
         if (AvailableChannels < OutputBufferDataBytesNeeded)
         {
@@ -1870,7 +1903,7 @@ bool c_OutputMgr::SetTestMode(const JsonObject& request, String& error)
     TestMode = candidate;
     TestStartedAt = millis();
     LastTestStep = uint32_t(-1);
-    memset(OutputBuffer, 0, sizeof(OutputBuffer));
+    memset(OutputBuffer, 0, GetBufferSize());
     for (auto& output : OutputChannelDrivers)
     {
         if (output.OutputDriverInUse) { ((c_OutputCommon*)output.OutputDriver)->SetTestModePaused(true); }
@@ -1914,7 +1947,7 @@ void c_OutputMgr::GetTestModeStatus(JsonObject& status)
 void c_OutputMgr::StopTestMode(bool restoreOutputs)
 {
     if (!TestMode.active) { return; }
-    memset(OutputBuffer, 0, sizeof(OutputBuffer));
+    memset(OutputBuffer, 0, GetBufferSize());
     for (auto& output : OutputChannelDrivers)
     {
         if (output.OutputDriverInUse) { ((c_OutputCommon*)output.OutputDriver)->SetTestModePaused(false, restoreOutputs); }

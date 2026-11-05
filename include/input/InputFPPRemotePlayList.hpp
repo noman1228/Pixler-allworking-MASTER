@@ -60,8 +60,13 @@ protected:
     fsm_PlayList_state * pCurrentFsmState = nullptr;
 
     c_InputFPPRemotePlayItem * pInputFPPRemotePlayItem = nullptr;
-    char InputFPPRemotePlayItem[sizeof(c_InputFPPRemotePlayEffect)];
-    // char InputFPPRemotePlayItem[sizeof(c_InputFPPRemotePlayFile)];
+    alignas((alignof(c_InputFPPRemotePlayFile) > alignof(c_InputFPPRemotePlayEffect))
+                ? alignof(c_InputFPPRemotePlayFile)
+                : alignof(c_InputFPPRemotePlayEffect))
+    char InputFPPRemotePlayItem[
+        (sizeof(c_InputFPPRemotePlayFile) > sizeof(c_InputFPPRemotePlayEffect))
+            ? sizeof(c_InputFPPRemotePlayFile)
+            : sizeof(c_InputFPPRemotePlayEffect)];
 
     uint32_t PlayListEntryId     = 0;
 

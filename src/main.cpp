@@ -209,6 +209,15 @@ void setup()
     // DEBUG_V(String("LoadConfig Heap: ") + String(ESP.getFreeHeap()));
     LoadConfig();
 
+#if defined(BOARD_ESP32_QUINLED_DIG_OCTA)
+    if (!OutputMgr.PrepareBuffer())
+    {
+        String Reason = F("ERROR: Unable to allocate output buffer");
+        RequestReboot(Reason, 100000, true);
+        return;
+    }
+#endif
+
     // TestHeap(uint32_t(20));
     // DEBUG_V(String("InputMgr Heap: ") + String(ESP.getFreeHeap()));
     // connect the input processing to the output processing.

@@ -30,44 +30,15 @@ static const c_InputEffectEngine::EffectDescriptor_t ListOfEffects[] =
 {//                                                                                    Mirror      AllLeds      wsTCode
     //    name                              func                   htmlid         Color      Reverse       white
 
-        // { "Disabled",     nullptr,                             "t_disabled",     1,    1,    1,    1,     0, "T0"     },
-        { "Solid",        &c_InputEffectEngine::effectSolidColor, "t_static",       1,    0,    0,    0,     0, "T1"     },
-        { "Blink",        &c_InputEffectEngine::effectBlink,      "t_blink",        1,    0,    0,    0,     0, "T2"     },
-        { "Flash",        &c_InputEffectEngine::effectFlash,      "t_flash",        1,    0,    0,    0,     0, "T3"     },
-        { "Rainbow",      &c_InputEffectEngine::effectRainbow,    "t_rainbow",      0,    1,    1,    1,     0, "T5"     },
-        { "Chase",        &c_InputEffectEngine::effectChase,      "t_chase",        1,    1,    1,    0,     0, "T4"     },
-        { "Fire flicker", &c_InputEffectEngine::effectFireFlicker,"t_fireflicker",  1,    0,    0,    0,     0, "T6"     },
-        { "Lightning",    &c_InputEffectEngine::effectLightning,  "t_lightning",    1,    0,    0,    0,     0, "T7"     },
-        { "Breathe",      &c_InputEffectEngine::effectBreathe,    "t_breathe",      1,    0,    0,    0,     0, "T8"     },
-        { "Random",       &c_InputEffectEngine::effectRandom,     "t_random",       0,    0,    0,    0,     0, "T9"     },
-        { "Transition",   &c_InputEffectEngine::effectTransition, "t_Transition",   0,    0,    0,    0,     0, "T10"    },
-        { "Marquee",      &c_InputEffectEngine::effectMarquee,    "t_Marquee",      0,    0,    0,    0,     0, "T11"    }
+        { "Solid",   &c_InputEffectEngine::effectSolidColor, "t_static",   1, 0, 0, 0, 0, "T1"  },
+        { "Rainbow", &c_InputEffectEngine::effectRainbow,     "t_rainbow",  0, 1, 1, 1, 0, "T5"  },
+        { "Marquee", &c_InputEffectEngine::effectMarquee,     "t_Marquee",  0, 0, 0, 0, 0, "T11" }
 };
 
 static std::vector<c_InputEffectEngine::dCRGB> TransitionColorTable =
 {
-	{ 85,  85,  85},
-	{128, 128,   0},
-	{128,   0, 128},
-	{  0, 128, 128},
-	{ 28, 128, 100},
-	{128, 100,  28},
-	{100,  28, 128},
-	{ 40, 175,  40},
-	{175,  40,  40},
-	{ 40,  40, 175},
-	{191,  64,   0},
-	{ 64,   0, 191},
-	{  0, 191,  64},
-	{128,  64,  64},
-	{ 64, 128,  64},
-	{ 64,  64, 128},
-	{ 80, 144,  32},
-	{144,  32,  80},
-	{ 32,  80, 144},
-	{100, 100,  55},
-	{ 55, 100, 100},
-	{100, 100,  55},
+    {85, 85, 85},
+    {128, 128, 0},
 };
 
 static std::vector<c_InputEffectEngine::MarqueeGroup_t> MarqueueGroupTable =
@@ -151,16 +122,6 @@ void c_InputEffectEngine::GetConfig (JsonObject& jsonConfig)
     JsonWrite(jsonConfig, CN_EffectColor,        HexColor);
     JsonWrite(jsonConfig, CN_pixel_count,        effectMarqueePixelAdvanceCount);
 
-    JsonWrite(jsonConfig, "FlashEnable",   FlashInfo.Enable);
-    JsonWrite(jsonConfig, "FlashMinInt",   FlashInfo.MinIntensity);
-    JsonWrite(jsonConfig, "FlashMaxInt",   FlashInfo.MaxIntensity);
-    JsonWrite(jsonConfig, "FlashMinDelay", FlashInfo.MinDelayMS);
-    JsonWrite(jsonConfig, "FlashMaxDelay", FlashInfo.MaxDelayMS);
-    JsonWrite(jsonConfig, "FlashMinDur",   FlashInfo.MinDurationMS);
-    JsonWrite(jsonConfig, "FlashMaxDur",   FlashInfo.MaxDurationMS);
-    JsonWrite(jsonConfig, "TransCount",    TransitionInfo.StepsToTarget);
-    JsonWrite(jsonConfig, "TransDelay",    TransitionInfo.TimeAtTargetMs);
-
     // DEBUG_V ("");
 
     JsonArray EffectsArray = jsonConfig[(char*)CN_effects].to<JsonArray> ();
@@ -171,16 +132,6 @@ void c_InputEffectEngine::GetConfig (JsonObject& jsonConfig)
         // DEBUG_V ("");
         JsonObject currentJsonEntry = EffectsArray.add<JsonObject> ();
         JsonWrite(currentJsonEntry, CN_name, currentEffect.name);
-    }
-
-    JsonArray TransitionsArray = jsonConfig[(char*)CN_transitions].to<JsonArray> ();
-    for (auto currentTransition : TransitionColorTable)
-    {
-        // DEBUG_V ("");
-        JsonObject currentJsonEntry = TransitionsArray.add<JsonObject> ();
-        JsonWrite(currentJsonEntry, CN_r, currentTransition.r);
-        JsonWrite(currentJsonEntry, CN_g, currentTransition.g);
-        JsonWrite(currentJsonEntry, CN_b, currentTransition.b);
     }
 
     JsonArray MarqueeGroupArray = jsonConfig[(char*)CN_MarqueeGroups].to<JsonArray> ();
@@ -249,53 +200,6 @@ void c_InputEffectEngine::NextEffect ()
 } // NextEffect
 
 //-----------------------------------------------------------------------------
-void c_InputEffectEngine::PollFlash ()
-{
-    do // once
-    {
-        if(!FlashInfo.Enable)
-        {
-            // not doing random flashing
-            break;
-        }
-        //  // DEBUG_V("Flash is enabled");
-
-        if(!FlashInfo.delaytimer.IsExpired())
-        {
-            // not time to flash yet
-            break;
-        }
-
-        // is the flash done?
-        if(FlashInfo.durationtimer.IsExpired())
-        {
-            // set up the next flash
-            uint32_t NextDelay = random(FlashInfo.MinDelayMS, FlashInfo.MaxDelayMS);
-            uint32_t NextDuration = random(FlashInfo.MinDurationMS, FlashInfo.MaxDurationMS);
-
-            FlashInfo.delaytimer.StartTimer(NextDelay, false);
-            FlashInfo.durationtimer.StartTimer(NextDelay + NextDuration, false);
-
-            // force the effect to overwrite the buffer
-            EffectDelayTimer.CancelTimer();
-            // DEBUG_V(String("         now: ") + String(now));
-            // DEBUG_V(String("   NextDelay: ") + String(NextDelay));
-            // DEBUG_V(String("NextDuration: ") + String(NextDuration));
-
-            // dont overwrite the buffer
-            break;
-        }
-
-        uint8_t intensity = uint8_t(map(random( FlashInfo.MinIntensity, FlashInfo.MaxIntensity),0,100,0,255));
-        CRGB color;
-        color.r = intensity;
-        color.g = intensity;
-        color.b = intensity;
-        setAll(color);
-    } while(false);
-
-} // PollFlash
-
 //-----------------------------------------------------------------------------
 void c_InputEffectEngine::Process ()
 {
@@ -305,7 +209,8 @@ void c_InputEffectEngine::Process ()
 
     do // once
     {
-        if (!HasBeenInitialized)
+        if (!HasBeenInitialized || Disabled || StayDark ||
+            (nullptr == ActiveEffect) || (nullptr == ActiveEffect->func))
         {
             break;
         }
@@ -319,23 +224,15 @@ void c_InputEffectEngine::Process ()
 
         if(!EffectDelayTimer.IsExpired())
         {
-            PollFlash();
             break;
         }
 
         // timer has expired
         uint32_t wait = (this->*ActiveEffect->func)();
-        uint32_t NewEffectWait = max ((int)wait, MIN_EFFECT_DELAY);
-        if(NewEffectWait != EffectWait)
-        {
-            EffectWait = NewEffectWait;
-            // DEBUG_V ("Update timer");
-            EffectDelayTimer.StartTimer(EffectWait, true);
-        }
+        wait = max(wait, uint32_t(MIN_EFFECT_DELAY));
+        EffectDelayTimer.StartTimer(wait, false);
         EffectCounter++;
         InputMgr.RestartBlankTimer (GetInputChannelId ());
-
-        PollFlash();
 
     } while (false);
 
@@ -376,29 +273,16 @@ void c_InputEffectEngine::Poll ()
             break;
         }
 
-        // // DEBUG_V("has the flash timer expired?");
         if(!EffectDelayTimer.IsExpired())
         {
-            // // DEBUG_V("Flash Timer has NOT expired");
-            PollFlash();
             break;
         }
 
-        // // DEBUG_V("timer has expired");
         uint32_t wait = (this->*ActiveEffect->func)();
-        uint32_t NewEffectWait = max ((int)wait, MIN_EFFECT_DELAY);
-        if(NewEffectWait != EffectWait)
-        {
-            EffectWait = NewEffectWait;
-            // // DEBUG_V ("Update timer");
-            EffectDelayTimer.StartTimer(EffectWait, true);
-        }
-        // // DEBUG_V("Update Blank timer");
+        wait = max(wait, uint32_t(MIN_EFFECT_DELAY));
+        EffectDelayTimer.StartTimer(wait, false);
         EffectCounter++;
         InputMgr.RestartBlankTimer (GetInputChannelId ());
-
-        // // DEBUG_V("Check Flash operation");
-        PollFlash();
 
     } while (false);
 
@@ -474,56 +358,7 @@ bool c_InputEffectEngine::SetConfig (ArduinoJson::JsonObject& jsonConfig)
     setFromJSON (effectColor,        jsonConfig, CN_EffectColor);
     // DEBUG_V (String ("effectColor: ") + effectColor);
     setFromJSON (effectMarqueePixelAdvanceCount, jsonConfig, CN_pixel_count);
-
-    setFromJSON (FlashInfo.Enable,             jsonConfig, "FlashEnable");
-    setFromJSON (FlashInfo.MinIntensity,       jsonConfig, "FlashMinInt");
-    setFromJSON (FlashInfo.MaxIntensity,       jsonConfig, "FlashMaxInt");
-    setFromJSON (FlashInfo.MinDelayMS,         jsonConfig, "FlashMinDelay");
-    setFromJSON (FlashInfo.MaxDelayMS,         jsonConfig, "FlashMaxDelay");
-    setFromJSON (FlashInfo.MinDurationMS,      jsonConfig, "FlashMinDur");
-    setFromJSON (FlashInfo.MaxDurationMS,      jsonConfig, "FlashMaxDur");
-
-    setFromJSON (TransitionInfo.StepsToTarget,  jsonConfig, "TransCount");
-    setFromJSON (TransitionInfo.TimeAtTargetMs, jsonConfig, "TransDelay");
-    // DEBUG_V(String(" TransitionInfo.StepsToTarget: ") + String(TransitionInfo.StepsToTarget));
-    // DEBUG_V(String("TransitionInfo.TimeAtTargetMs: ") + String(TransitionInfo.TimeAtTargetMs));
-
-    // avoid divide by zero errors later in the processing.
-    TransitionInfo.StepsToTarget = max(uint32_t(1), TransitionInfo.StepsToTarget);
-    // Pretend we reached the currnt color.
-    TransitionInfo.CurrentColor = *TransitionInfo.TargetColorIterator;
-
-    // apply minimum transition hold time
-    TransitionInfo.TimeAtTargetMs = max(uint32_t(1), TransitionInfo.TimeAtTargetMs);
-    // DEBUG_V(String(" TransitionInfo.StepsToTarget: ") + String(TransitionInfo.StepsToTarget));
-    // DEBUG_V(String("TransitionInfo.TimeAtTargetMs: ") + String(TransitionInfo.TimeAtTargetMs));
-
-    // make sure max is really max
-    if(FlashInfo.MinIntensity >= FlashInfo.MaxIntensity)
-    {
-        FlashInfo.MinIntensity = FlashInfo.MaxIntensity;
-    }
-
-    JsonArray TransitionsArray = jsonConfig[(char*)CN_transitions];
-    if(TransitionsArray)
-    {
-        TransitionColorTable.clear();
-
-        for (auto Transition : TransitionsArray)
-        {
-            // DEBUG_V ("");
-            dCRGB NewColorTarget;
-            JsonObject currentTransition = Transition.as<JsonObject>();
-            setFromJSON (NewColorTarget.r, currentTransition, "r");
-            setFromJSON (NewColorTarget.g, currentTransition, "g");
-            setFromJSON (NewColorTarget.b, currentTransition, "b");
-            // DEBUG_V (String("NewColorTarget.r: ") + String(NewColorTarget.r));
-            // DEBUG_V (String("NewColorTarget.g: ") + String(NewColorTarget.g));
-            // DEBUG_V (String("NewColorTarget.b: ") + String(NewColorTarget.b));
-
-            TransitionColorTable.push_back(NewColorTarget);
-        }
-    }
+    effectMarqueePixelAdvanceCount = max(uint32_t(1), effectMarqueePixelAdvanceCount);
 
     JsonArray MarqueeGroupArray = jsonConfig[(char*)CN_MarqueeGroups];
     if(MarqueeGroupArray)
@@ -546,6 +381,8 @@ bool c_InputEffectEngine::SetConfig (ArduinoJson::JsonObject& jsonConfig)
             setFromJSON (NewGroup.NumPixelsInGroup, currentMarqueeGroup, CN_pixel_count);
             setFromJSON (NewGroup.StartingIntensity, currentMarqueeGroup, CN_brightness);
             setFromJSON (NewGroup.EndingIntensity, currentMarqueeGroup, CN_brightnessEnd);
+            NewGroup.StartingIntensity = min(uint8_t(100), NewGroup.StartingIntensity);
+            NewGroup.EndingIntensity = min(uint8_t(100), NewGroup.EndingIntensity);
 
             MarqueueGroupTable.push_back(NewGroup);
         }
@@ -598,9 +435,8 @@ void c_InputEffectEngine::setBrightness (float brightness)
 // Yukky maths here. Input speeds from 1..10 get mapped to 17782..100
 void c_InputEffectEngine::setSpeed (uint16_t speed)
 {
-    EffectSpeed = speed;
-    // DEBUG_V(String("EffectSpeed: ") + String(speed));
-    setDelay (pow (10, (10 - speed) / 4.0 + 2));
+    EffectSpeed = min(uint16_t(10), max(uint16_t(1), speed));
+    setDelay (uint16_t(pow (10, (10 - EffectSpeed) / 4.0 + 2)));
 }
 
 //-----------------------------------------------------------------------------
@@ -621,29 +457,28 @@ void c_InputEffectEngine::setDelay (uint16_t delay)
 //-----------------------------------------------------------------------------
 void c_InputEffectEngine::setEffect (const String & effectName)
 {
-    // DEBUG_START;
-
     int EffectIndex = 0;
-    for (EffectDescriptor_t currentEffect : ListOfEffects)
+    const int EffectCount = sizeof(ListOfEffects) / sizeof(ListOfEffects[0]);
+    for (; EffectIndex < EffectCount; ++EffectIndex)
     {
-        if (effectName.equalsIgnoreCase (currentEffect.name))
+        if (effectName.equalsIgnoreCase(ListOfEffects[EffectIndex].name))
         {
-            // DEBUG_V ("Found desired effect");
-            if (!ActiveEffect->name.equalsIgnoreCase (currentEffect.name))
+            if ((nullptr == ActiveEffect) ||
+                !ActiveEffect->name.equalsIgnoreCase(ListOfEffects[EffectIndex].name))
             {
-                // DEBUG_V ("Starting New Effect");
                 ActiveEffect = &ListOfEffects[EffectIndex];
-                EffectDelayTimer.StartTimer(EffectDelay, true);
-                EffectWait = MIN_EFFECT_DELAY;
+                EffectDelayTimer.CancelTimer();
                 EffectCounter = 0;
                 EffectStep = 0;
             }
-            break;
+            return;
         }
-        EffectIndex++;
-    } // end for each effect
+    }
 
-    // DEBUG_END;
+    ActiveEffect = &ListOfEffects[0];
+    EffectDelayTimer.CancelTimer();
+    EffectCounter = 0;
+    EffectStep = 0;
 
 } // setEffect
 
@@ -842,35 +677,22 @@ uint16_t c_InputEffectEngine::effectChase ()
 //-----------------------------------------------------------------------------
 uint16_t c_InputEffectEngine::effectRainbow ()
 {
-    // Effect Step will be in the range zero through the number of pixels and is used
-    // to set the starting point for the colors
-
-    // DEBUG_START;
-    // calculate only half the pixels if mirroring
-    uint16_t NumberOfPixelsToOutput = MirroredPixelCount;
-
-    // Next step or wrap
-    if (++EffectStep >= NumberOfPixelsToOutput) { EffectStep = 0; }
-
-    // DEBUG_V (String ("MirroredPixelCount: ") + String (MirroredPixelCount));
-    // DEBUG_V (String ("        EffectStep: ") + String (EffectStep));
-
-    for (uint16_t CurrentPixelId = 0; CurrentPixelId < NumberOfPixelsToOutput; CurrentPixelId++)
+    uint32_t NumberOfPixelsToOutput = MirroredPixelCount;
+    if (0 == NumberOfPixelsToOutput)
     {
-        uint32_t hue = EffectStep;
-        if (!EffectAllLeds)
-        {
-            hue = CurrentPixelId + EffectStep;
-            if (hue > NumberOfPixelsToOutput) { hue -= NumberOfPixelsToOutput; }
-        }
-        hue = map (hue, 0, NumberOfPixelsToOutput, 0, 359);
-        CRGB color = hsv2rgb ({ double (hue), 1.0, 1.0 });
-
-        outputEffectColor ((NumberOfPixelsToOutput - CurrentPixelId) - 1, color);
-        // outputEffectColor (CurrentPixelId, color);
+        return EffectDelay / 256;
     }
 
-    // DEBUG_END;
+    EffectStep = (EffectStep + 1) % NumberOfPixelsToOutput;
+    for (uint32_t CurrentPixelId = 0; CurrentPixelId < NumberOfPixelsToOutput; ++CurrentPixelId)
+    {
+        uint32_t hueStep = EffectAllLeds
+            ? EffectStep
+            : (CurrentPixelId + EffectStep) % NumberOfPixelsToOutput;
+        uint8_t hue = uint8_t((hueStep * 256U) / NumberOfPixelsToOutput);
+        outputEffectColor(uint16_t(NumberOfPixelsToOutput - CurrentPixelId - 1), colorWheel(hue));
+    }
+
     return (EffectDelay / 256);
 
 } // effectRainbow
@@ -1031,14 +853,27 @@ uint16_t c_InputEffectEngine::effectMarquee ()
 
     // DEBUG_V(String("MarqueeTargetColorId: ") + String(MarqueeTargetColorId));
 
-    uint32_t CurrentMarqueePixelLocation = effectMarqueePixelLocation;
+    if ((0 == PixelCount) || MarqueueGroupTable.empty())
+    {
+        clearAll();
+        return EffectDelay / 10;
+    }
+
+    uint32_t CurrentMarqueePixelLocation = effectMarqueePixelLocation % PixelCount;
     uint32_t NumPixelsToProcess = PixelCount;
     do
     {
+        bool processedPixels = false;
         // iterate through the groups until we have processed all of the pixels.
         for(auto CurrentGroup : MarqueueGroupTable)
         {
             uint32_t groupPixelCount = CurrentGroup.NumPixelsInGroup;
+            if (0 == groupPixelCount)
+            {
+                continue;
+            }
+
+            processedPixels = true;
             double CurrentBrightness = (EffectReverse) ? CurrentGroup.EndingIntensity : CurrentGroup.StartingIntensity;
             double BrightnessInterval = (double(CurrentGroup.StartingIntensity) - double(CurrentGroup.EndingIntensity))/double(groupPixelCount);
 
@@ -1091,15 +926,16 @@ uint16_t c_InputEffectEngine::effectMarquee ()
             }
         }
 
+        if (!processedPixels)
+        {
+            clearAll();
+            return EffectDelay / 10;
+        }
     } while (NumPixelsToProcess);
 
     // advance to the next starting location
-    effectMarqueePixelLocation += effectMarqueePixelAdvanceCount;
-    if(effectMarqueePixelLocation >= PixelCount)
-    {
-        // wrap around
-        effectMarqueePixelLocation-= PixelCount;
-    }
+    effectMarqueePixelLocation = (CurrentMarqueePixelLocation +
+        (effectMarqueePixelAdvanceCount % PixelCount)) % PixelCount;
 
     // DEBUG_END;
     return (EffectDelay / 10);
@@ -1229,35 +1065,6 @@ uint16_t c_InputEffectEngine::effectBlink ()
 } // effectBlink
 
 //-----------------------------------------------------------------------------
-uint16_t c_InputEffectEngine::effectFlash ()
-{
-    // DEBUG_START;
-    // The Flash effect uses 6 "time slots": on, off, on, off, off, off
-    // Using default delay, a complete sequence takes 2s.
-    // Prevent errors if we come from another effect with more steps
-    EffectStep = EffectStep % 6;
-
-    switch (EffectStep)
-    {
-    case 0:
-    case 2:
-    {
-        setAll (EffectColor);
-        break;
-    }
-
-    default:
-    {
-        clearAll ();
-        break;
-    }
-    }
-
-    EffectStep = (1 + EffectStep) % 6;
-    // DEBUG_END;
-    return EffectDelay / 3;
-} // effectFlash
-
 //-----------------------------------------------------------------------------
 uint16_t c_InputEffectEngine::effectFireFlicker ()
 {

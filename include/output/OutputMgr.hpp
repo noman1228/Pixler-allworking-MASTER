@@ -47,6 +47,7 @@ public:
     virtual ~c_OutputMgr ();
 
     void      Begin             ();                        ///< set up the operating environment based on the current config (or defaults)
+    bool      PrepareBuffer     ();
     void      Poll              ();                        ///< Call from loop(),  renders output data
     void      ScheduleLoadConfig () {ConfigReload.Schedule(millis()); RequestConfigReloadStop();}
     void      RequestConfigReloadStop() {ConfigReloadStopRequested.store(true, std::memory_order_release);}
@@ -59,7 +60,7 @@ public:
     void      GetPortCounts     (uint16_t& PixelCount, uint16_t& SerialCount) {PixelCount = uint16_t(OutputChannelId_End); SerialCount = uint16_t(NUM_UARTS); }
     uint8_t*  GetBufferAddress  () { return OutputBuffer; } ///< Get the address of the buffer into which the E1.31 handler will stuff data
     uint32_t  GetBufferUsedSize () { return UsedBufferSize; } ///< Get the size (in intensities) of the buffer into which the E1.31 handler will stuff data
-    uint32_t  GetBufferSize     () { return sizeof(OutputBuffer); } ///< Get the size (in intensities) of the buffer into which the E1.31 handler will stuff data
+    uint32_t  GetBufferSize     (); ///< Get the size (in intensities) of the buffer into which the E1.31 handler will stuff data
     void      DeleteConfig      () { FileMgr.DeleteFlashFile (ConfigFileName); }
     void      PauseOutputs      (bool NewState);
     void      GetDriverName     (String & Name) { Name = "OutputMgr"; }
@@ -205,7 +206,9 @@ public:
         OutputType_Start = OutputType_Disabled,
     };
 
-#ifdef ARDUINO_ARCH_ESP8266
+#if defined(BOARD_ESP32_QUINLED_DIG_OCTA)
+#   define OM_MAX_NUM_CHANNELS  (8 * 600 * 3)
+#elif defined(ARDUINO_ARCH_ESP8266)
 #   define OM_MAX_NUM_CHANNELS  (1200 * 3)
 #else // ARDUINO_ARCH_ESP32
 #   define OM_MAX_NUM_CHANNELS  (3000 * 3)
@@ -283,7 +286,11 @@ private:
 
     String ConfigFileName;
 
+#if defined(BOARD_ESP32_QUINLED_DIG_OCTA)
+    uint8_t*   OutputBuffer = nullptr;
+#else
     uint8_t    OutputBuffer[OM_MAX_NUM_CHANNELS];
+#endif
     uint32_t   UsedBufferSize = 0;
     gpio_num_t ConsoleTxGpio  = gpio_num_t::GPIO_NUM_1;
     gpio_num_t ConsoleRxGpio  = gpio_num_t::GPIO_NUM_3;

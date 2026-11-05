@@ -378,7 +378,7 @@ $(function ()
         $('#btn_network').prop("disabled", ValidateConfigFields($("#network #wifi input")));
     }));
 
-    $('#config').on("input", (function () {
+    $('#config').on("input change", (function () {
         $('#DeviceConfigSave').prop("disabled", ValidateConfigFields($('#config input')));
     }));
 
@@ -1270,27 +1270,6 @@ function ProcessModeConfigurationDataEffects(channelConfig) {
         SetEffectVisibility();
     });
 
-    // set up the transitions table
-    $('#TransitionColorTable tbody').removeData();
-
-    channelConfig.transitions.forEach(element => {
-        // console.debug("Element.r = " + element.r);
-        // console.debug("Element.g = " + element.g);
-        // console.debug("Element.b = " + element.b);
-
-        let CurrentColor = "#" + ((element.r * 256 * 256) + (element.g * 256) + element.b).toString(16);
-        transitionAddRow(CurrentColor);
-    });
-
-    RenumberTransitionTable();
-
-    $('#AddTransitionBtn').off();
-    $('#AddTransitionBtn').on("click", (function () {
-        // console.debug("Add a transition");
-        transitionAddRow('#000000');
-        RenumberTransitionTable();
-    }));
-
     // set up the marqueue groups table
     $('#MarqueeGroupTable tbody').removeData();
 
@@ -1326,17 +1305,10 @@ function SetEffectVisibility()
     if($(jqSelector).val()==="Marquee")
     {
         $("#MarqueeConfig").removeClass("hidden");
-        $("#TransitionsConfig").addClass("hidden");
-    }
-    else if($(jqSelector).val()==="Transition")
-    {
-        $("#MarqueeConfig").addClass("hidden");
-        $("#TransitionsConfig").removeClass("hidden");
     }
     else
     {
         $("#MarqueeConfig").addClass("hidden");
-        $("#TransitionsConfig").addClass("hidden");
     }
 } // SetEffectVisibility
 
@@ -1362,68 +1334,6 @@ function UUID() {
         }
     };
 } // UUID
-
-function transitionAddRow(CurrentColor) {
-
-    // console.debug("length " + $('#TransitionColorTable tbody tr').length);
-
-    if (26 > $('#TransitionColorTable tbody tr').length) {
-        let CurrentRowId = 'UUID_' + UUID().toString().toUpperCase();
-        // console.debug("CurrentColor " + CurrentColor);
-
-        while (-1 !== CurrentRowId.indexOf("-")) {
-            CurrentRowId = CurrentRowId.replace("-", "_");
-        }
-
-        while (CurrentColor.length < 7) { CurrentColor = CurrentColor.replace("#", "#0"); }
-
-        let TransitionIdPattern = '<td>' + (CurrentRowId) + '</td>';
-        let TransitionColorPattern = '<td><input type="color" class="form-control is-valid" id="transitionColor_' + CurrentRowId + '" value="' + CurrentColor + '"></td>';
-        let TransitionDeletePattern = '<td><button type="Button" class="btn btn-primary" RowId="' + CurrentRowId + '" id="transitionDelete_' + CurrentRowId + '">Delete</button></td>';
-        let rowPattern = '<tr id="transitionRow_' + (CurrentRowId) + '" RowId="' + CurrentRowId + '"> ' + TransitionIdPattern + TransitionColorPattern + TransitionDeletePattern + '</tr> ';
-        $('#TransitionColorTable tbody tr:last').after(rowPattern);
-        $('#transitionDelete_' + CurrentRowId).on("click", (function () { transitionDeleteRow($(this)); }));
-    }
-} // transitionAddRow
-
-function transitionDeleteRow(button) {
-
-    let RowId = $(button).attr("RowId");
-    // console.debug("Got Click for CurrentRowId: " + RowId);
-    // console.debug("Length: " + $('#TransitionColorTable tbody tr').length);
-    // 3 = hdr+2 rows
-    if (3 < $('#TransitionColorTable tbody tr').length) {
-        $('#transitionRow_' + RowId).remove();
-        RenumberTransitionTable();
-    }
-
-} // transitionDeleteRow
-
-function RenumberTransitionTable() {
-    // renumber the table
-    // console.debug("Length " + $('#TransitionColorTable tbody tr').length);
-
-    $('#TransitionColorTable tbody tr').each(elementId => {
-        if (0 !== elementId) {
-            // console.debug(elementId);
-            $('#TransitionColorTable tbody tr:eq(' + elementId + ') td:eq(0)').html((elementId).toString());
-            if (4 > $('#TransitionColorTable tbody tr').length) {
-                $('#TransitionColorTable tbody tr:eq(' + elementId + ') td:eq(2)').hide();
-            }
-            else {
-                $('#TransitionColorTable tbody tr:eq(' + elementId + ') td:eq(2)').show();
-            }
-        }
-    });
-
-    if (26 > $('#TransitionColorTable tbody tr').length) {
-        $('#AddTransitionBtn').show();
-    }
-    else {
-        $('#AddTransitionBtn').hide();
-    }
-
-} // RenumberTransitionTable
 
 function MarqueeGroupAddRow(CurrentConfig) {
 
@@ -2172,55 +2082,14 @@ function ExtractChannelConfigFromHtmlPage(JsonConfig, SectionName) {
         }
         else if (ChannelConfig.type === "Effects")
         {
-            // transitions need extra processing
             ExtractConfigFromHtmlPages(elementids, modeControlName, ChannelConfig);
 
-            // the auto export adds the add color button to the structure. Remove it.
-            delete ChannelConfig["AddTransitionBtn"];
             delete ChannelConfig["AddMarqueeGroupBtn"];
-
-            // build a new transitions array
-            const transitions = [];
-            transitions.length = $('#TransitionColorTable tbody tr').length - 1;
-            let elementId = 0; // row counter into the json array
-
-            $('#TransitionColorTable tbody tr').each(function () {
-                let CurRow = $(this)[0];
-                let RowId = $(CurRow).attr("RowId");
-
-                if (undefined !== RowId) {
-                    // console.debug("RowId = " + RowId);
-
-                    let DeleteButtonName = 'transitionDelete_' + RowId;
-                    let elementName = 'transitionColor_' + RowId;
-                    // console.debug("DeleteButtonName = " + DeleteButtonName);
-                    // console.debug("elementName = " + elementName);
-
-                    // the auto export adds the delete and raw color data to the structure. Remove it.
-                    delete ChannelConfig[DeleteButtonName];
-                    delete ChannelConfig[elementName];
-
-                    let HexValue = $('#' + elementName).val();
-
-                    // console.debug("HexValue = " + HexValue);
-                    // console.debug("r = " + hexToRgb(HexValue).r);
-                    // console.debug("g = " + hexToRgb(HexValue).g);
-                    // console.debug("b = " + hexToRgb(HexValue).b);
-                    transitions[elementId] = {};
-                    let transition = transitions[elementId];
-                    transition.r = hexToRgb(HexValue).r;
-                    transition.g = hexToRgb(HexValue).g;
-                    transition.b = hexToRgb(HexValue).b;
-                    elementId++;
-                }
-            });
-
-            ChannelConfig.transitions = transitions;
 
             // build a new MarqueeGroup array
             const MarqueeGroups = [];
             MarqueeGroups.length = $('#MarqueeGroupTable tbody tr').length - 1;
-            elementId = 0; // row counter into the json array
+            let elementId = 0; // row counter into the json array
 
             delete ChannelConfig["MarqueeGroups"];
 
@@ -2334,7 +2203,7 @@ function ValidateConfigFields(ElementList) {
         let ChildElement = ElementList[ChildElementId];
         // let ChildType = ChildElement.type;
 
-        if ((ChildElement.validity.valid !== undefined) && (!$(ChildElement).hasClass('hidden'))) {
+        if ((ChildElement.validity.valid !== undefined) && (0 === $(ChildElement).closest('.hidden').length)) {
             // console.debug("ChildElement.validity.valid: " + ChildElement.validity.valid);
             if (false === ChildElement.validity.valid) {
                 // console.debug("          Element: " + ChildElement.id);

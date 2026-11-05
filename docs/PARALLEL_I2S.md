@@ -25,6 +25,12 @@ To build the existing RMT variant:
 pio run -e jmt_esp32_dig_octa
 ```
 
+For eight 600-pixel RGB outputs, use the RMT variant. It streams pixel data
+through each RMT peripheral and does not reserve a full encoded waveform in
+internal DMA RAM. The I2S backend currently needs about 58.7 KB of contiguous
+DMA memory for that configuration, which may exceed the available internal
+heap on the Dig-Octa controller.
+
 These commands compile firmware. They do not upload it to a controller.
 
 ## Supported outputs and configuration
@@ -78,9 +84,13 @@ null pixels and the minimum reset interval, needs 97,120 waveform bytes before
 DMA descriptors and the source snapshot are counted. Eight equal-length lanes
 share that waveform length; they do not require eight separate waveforms.
 
-The existing logical output-buffer limits still apply. The parallel backend
-adds a separate DMA memory requirement; it does not increase the configured
-channel capacity or promise a fixed maximum number of pixels per port.
+The Dig-Octa logical output buffer holds 14,400 channel bytes total, enough for
+eight 600-pixel RGB outputs when all eight ports are configured. The buffer is
+allocated before the input manager starts its worker task, avoiding both an
+enlarged static DRAM image and access before allocation. Startup reports an
+error and requests a reboot if allocation fails. This logical capacity is
+separate from the parallel backend's DMA requirement, and the parallel backend
+does not promise a fixed maximum number of pixels per port.
 
 If sizing, DMA allocation or transmitter initialization fails, the parallel
 outputs must remain stopped and report the failure. The firmware must not
